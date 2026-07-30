@@ -25,7 +25,9 @@ function getVideoOptions(): readonly TwelveLabsVideoOption[] {
     for (const particle of clip.particle_instances) {
       if (
         particle.fields.fp_token.state === "skipped" ||
-        particle.fields.fp_timing.state === "skipped"
+        particle.fields.fp_timing.state === "skipped" ||
+        particle.fields.fp_token.suggestion.source !== "mfa" ||
+        particle.fields.fp_timing.suggestion.source !== "mfa"
       ) {
         continue;
       }

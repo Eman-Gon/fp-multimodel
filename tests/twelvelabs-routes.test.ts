@@ -576,6 +576,11 @@ test("invalid cross-video input is rejected before TwelveLabs is called", async 
 
   assert.equal(response.status, 400);
   assert.equal(body.error.code, "INVALID_REQUEST");
+  assert.deepEqual(body.error.details, {
+    retryable: false,
+    video_id: "vid-other",
+    instance_id: "vid-03:u1",
+  });
   assert.equal(providerCalls, 0);
 });
 

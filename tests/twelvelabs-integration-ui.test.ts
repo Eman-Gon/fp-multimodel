@@ -206,7 +206,7 @@ test("the result view keeps IDs, provenance, and human-review labeling visible",
   assert.match(markup, /TWELVELABS_API_KEY/);
   assert.doesNotMatch(markup, /type="password"/);
   assert.doesNotMatch(markup, /name="api_key"/);
-  assert.match(markup, /readonly=""/);
+  assert.match(markup, /readOnly=""/);
   assert.match(markup, /retained Track A timing is read-only/i);
 });
 

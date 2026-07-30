@@ -280,7 +280,9 @@ GET /api/integrations/twelvelabs/status
 }
 ```
 
-The browser workflow is available at `/integrations/twelvelabs`.
+The browser workflow is available at `/integrations/twelvelabs`. It indexes
+registered source videos only, so an upload cannot become an analysis dead end
+without a retained particle instance.
 
 ### Index a video
 
@@ -382,6 +384,10 @@ processing and `retryable: false` after a terminal upload failure:
 }
 ```
 
+The setup page replays the immutable Track A token and timing suggestions.
+Skipped inputs are excluded, and the retained source-video timing is read-only
+so a reviewed or ad hoc value is never relabeled as an MFA suggestion.
+
 `POST /api/integrations/twelvelabs/analyze` returns the same `video_id`,
 `instance_id`, and `asset_id` with an unconfirmed `GestureAnnotationDraft`.
 Every AI field has `confirmed: false`. `model_evidence.pegasus` retains the
@@ -412,10 +418,15 @@ Retry transport failures, timeouts, rate limits, and provider 5xx failures only
 when `details.retryable` is `true`. Resume polling with the saved provider IDs;
 do not repeat a completed upload or indexing action, because provider creation
 requests are not assumed to be idempotent. A failed video can be retried
-without rerunning completed videos.
+without rerunning completed videos. These are API-level recovery rules: the
+setup page's **Start indexing** action begins a new upload and does not resume a
+timed-out run. Before starting again, recover the saved IDs from the API caller
+or provider console and poll the explicit `status` action, or verify that the
+previous provider operation is terminal.
 
 A successful analysis is still only an AI suggestion. It does not confirm a
-clip or enter corpus counts automatically. Import drafts through the
+clip or enter corpus counts automatically. The setup page displays the draft
+but does not persist or confirm it. Import drafts through the
 optimistic-versioned Track B clip endpoint, then require a researcher to
 accept, edit, or skip each field in the coding workspace. The original Pegasus
 suggestion and provider provenance remain stored after review; only explicit

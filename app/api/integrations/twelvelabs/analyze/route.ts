@@ -35,10 +35,19 @@ export async function POST(request: Request): Promise<Response> {
       "particle",
     );
   } catch (error) {
+    const instanceId = (
+      parsed.particle as unknown as { readonly instance_id?: unknown }
+    ).instance_id;
     return invalidRequestResponse(
       error instanceof Error
         ? error.message
         : "The particle payload is invalid.",
+      {
+        video_id: parsed.video_id,
+        ...(typeof instanceId === "string"
+          ? { instance_id: instanceId }
+          : {}),
+      },
     );
   }
 
@@ -163,10 +172,14 @@ async function parseCommand(
   ) {
     return invalidRequestResponse(
       "video_id, asset_id, and a positive integer video_duration_ms are required.",
+      requestIdentity(value),
     );
   }
   if (!isRecord(value.particle)) {
-    return invalidRequestResponse("particle must be an object.");
+    return invalidRequestResponse(
+      "particle must be an object.",
+      requestIdentity(value),
+    );
   }
   const instanceId = value.instance_id;
   if (
@@ -176,6 +189,7 @@ async function parseCommand(
   ) {
     return invalidRequestResponse(
       "instance_id must match particle.instance_id when provided.",
+      requestIdentity(value),
     );
   }
 
@@ -184,5 +198,20 @@ async function parseCommand(
     asset_id: assetId,
     video_duration_ms: duration,
     particle: value.particle as unknown as FinalParticleInstance,
+  };
+}
+
+function requestIdentity(
+  value: Record<string, unknown>,
+): { readonly video_id?: string; readonly instance_id?: string } {
+  const videoId = readRequiredString(value, "video_id");
+  const particleInstanceId = isRecord(value.particle)
+    ? readRequiredString(value.particle, "instance_id")
+    : null;
+  const instanceId =
+    readRequiredString(value, "instance_id") ?? particleInstanceId;
+  return {
+    ...(videoId === null ? {} : { video_id: videoId }),
+    ...(instanceId === null ? {} : { instance_id: instanceId }),
   };
 }

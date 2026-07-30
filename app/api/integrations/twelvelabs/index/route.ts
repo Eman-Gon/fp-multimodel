@@ -136,6 +136,7 @@ async function parseCommand(
   ) {
     return invalidRequestResponse(
       "action must be upload, index, or status.",
+      requestVideoContext(value),
     );
   }
 
@@ -149,6 +150,7 @@ async function parseCommand(
     if (videoUrl === null) {
       return invalidRequestResponse(
         "Upload requests require a non-empty video_url.",
+        common,
       );
     }
     const filename = readOptionalString(value, "filename");
@@ -167,6 +169,7 @@ async function parseCommand(
   if (assetId === null) {
     return invalidRequestResponse(
       `${inferredAction} requests require a non-empty asset_id.`,
+      common,
     );
   }
   if (inferredAction === "index") {
@@ -201,28 +204,32 @@ async function parseMultipartCommand(
     return invalidRequestResponse("Multipart request body could not be read.");
   }
 
+  const videoId = readFormString(form, "video_id");
+  const indexId = readFormString(form, "index_id");
   const action = form.get("action");
   if (action !== null && action !== "upload") {
     return invalidRequestResponse(
       "Multipart requests support only the upload action.",
+      videoId === null ? undefined : { video_id: videoId },
     );
   }
-  const videoId = readFormString(form, "video_id");
-  const indexId = readFormString(form, "index_id");
   if (videoId === null || indexId === null) {
     return invalidRequestResponse(
       "Multipart upload requires video_id and index_id.",
+      videoId === null ? undefined : { video_id: videoId },
     );
   }
   const file = form.get("video_file") ?? form.get("file");
   if (!(file instanceof File)) {
     return invalidRequestResponse(
       "Multipart upload requires a video_file.",
+      { video_id: videoId },
     );
   }
   if (file.size === 0 || file.size > MAX_DIRECT_UPLOAD_BYTES) {
     return invalidRequestResponse(
       "video_file must be between 1 byte and 200 MB.",
+      { video_id: videoId },
     );
   }
   const filename = readOptionalFormString(form, "filename") ?? file.name;
@@ -243,6 +250,7 @@ function parseCommonFields(
   if (videoId === null || indexId === null) {
     return invalidRequestResponse(
       "video_id and index_id must be non-empty strings.",
+      videoId === null ? undefined : { video_id: videoId },
     );
   }
   return { video_id: videoId, index_id: indexId };
@@ -257,9 +265,19 @@ function readOptionalString(
     return undefined;
   }
   if (typeof field !== "string" || field.trim().length === 0) {
-    return invalidRequestResponse(`${key} must be a non-empty string.`);
+    return invalidRequestResponse(
+      `${key} must be a non-empty string.`,
+      requestVideoContext(value),
+    );
   }
   return field;
+}
+
+function requestVideoContext(
+  value: Record<string, unknown>,
+): { readonly video_id?: string } {
+  const videoId = readRequiredString(value, "video_id");
+  return videoId === null ? {} : { video_id: videoId };
 }
 
 function readFormString(form: FormData, key: string): string | null {

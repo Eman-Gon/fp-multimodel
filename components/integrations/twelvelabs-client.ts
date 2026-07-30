@@ -310,15 +310,24 @@ export function parseIndexPayload(
     throw invalidResponse("index");
   }
 
-  return {
+  const common = {
     provider: "twelvelabs",
     video_id: data.video_id,
     index_id: data.index_id,
     asset_id: data.asset_id,
-    indexed_asset_id: data.indexed_asset_id,
-    stage: data.stage,
     status: data.status,
-  };
+  } as const;
+  return data.stage === "upload"
+    ? {
+        ...common,
+        indexed_asset_id: null,
+        stage: "upload",
+      }
+    : {
+        ...common,
+        indexed_asset_id: data.indexed_asset_id as string,
+        stage: "index",
+      };
 }
 
 export function parseGestureSuggestionPayload(

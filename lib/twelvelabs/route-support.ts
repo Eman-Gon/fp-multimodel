@@ -45,8 +45,16 @@ export function integrationErrorResponse(
   );
 }
 
-export function invalidRequestResponse(message: string): Response {
-  return errorResponse(400, "INVALID_REQUEST", message);
+export function invalidRequestResponse(
+  message: string,
+  context?: Pick<ApiErrorDetails, "video_id" | "instance_id">,
+): Response {
+  return errorResponse(
+    400,
+    "INVALID_REQUEST",
+    message,
+    context === undefined ? undefined : { retryable: false, ...context },
+  );
 }
 
 export function invalidJsonResponse(): Response {
