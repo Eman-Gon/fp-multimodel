@@ -6,7 +6,12 @@ import {
   createDemoClips,
   DEMO_CLIP_ID,
 } from "./seed.ts";
-import type { ClipCommand, ClipDetail, ClipListItem } from "./types.ts";
+import type {
+  ClipCommand,
+  ClipDetail,
+  ClipListItem,
+  ConfirmedExplorerClipListItem,
+} from "./types.ts";
 
 const STORE_KEY = "__finalParticleTrackCStore";
 
@@ -36,6 +41,15 @@ export function listClips(): readonly ClipListItem[] {
     const rightConfidence = right.lowest_confidence ?? 1;
     return leftConfidence - rightConfidence;
   });
+}
+
+export function listConfirmedExplorerClips(): readonly ConfirmedExplorerClipListItem[] {
+  return Array.from(getStore().values())
+    .map(toConfirmedExplorerListItem)
+    .filter(
+      (clip): clip is ConfirmedExplorerClipListItem => clip !== null,
+    )
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export function getClipById(clipId: string): ClipDetail | null {
@@ -83,6 +97,7 @@ function toListItem(clip: ClipDetail): ClipListItem {
     clip.participant_options.find(({ id }) => id === speakerId)?.label ??
     speakerId;
   const confidences = listReviewUnits(clip)
+    .filter(({ field }) => field.state === "suggested")
     .map(({ field }) => field.suggestion.confidence)
     .filter((confidence): confidence is number => confidence !== null);
 
@@ -105,5 +120,56 @@ function toListItem(clip: ClipDetail): ClipListItem {
     lowest_confidence:
       confidences.length === 0 ? null : Math.min(...confidences),
     duration_ms: clip.clip.end_ms - clip.clip.start_ms,
+  };
+}
+
+function toConfirmedExplorerListItem(
+  clip: ClipDetail,
+): ConfirmedExplorerClipListItem | null {
+  if (clip.clip.status !== "confirmed") {
+    return null;
+  }
+
+  const particle = clip.particle_instances[0];
+  if (particle === undefined) {
+    return null;
+  }
+
+  const particleToken = particle.fields.fp_token.value;
+  const communicativeFunction = clip.fields.communicative_function.value;
+  if (
+    particle.fields.fp_token.state !== "confirmed" ||
+    particleToken === null ||
+    clip.fields.communicative_function.state !== "confirmed" ||
+    communicativeFunction === null
+  ) {
+    return null;
+  }
+
+  const sentenceType =
+    clip.fields.sentence_type.state === "confirmed"
+      ? clip.fields.sentence_type.value
+      : null;
+  const speakerId =
+    clip.fields.speaker_id.state === "confirmed"
+      ? clip.fields.speaker_id.value
+      : null;
+  const speakerLabel =
+    speakerId === null
+      ? null
+      : (clip.participant_options.find(({ id }) => id === speakerId)?.label ??
+        speakerId);
+
+  return {
+    id: clip.clip.id,
+    name: clip.clip.name,
+    video_id: clip.video.id,
+    transcript: clip.utterance.text,
+    particle: particleToken,
+    particle_pinyin: particle.fp_pinyin,
+    communicative_function: communicativeFunction,
+    sentence_type: sentenceType,
+    speaker_label: speakerLabel,
+    status: "confirmed",
   };
 }

@@ -9,6 +9,7 @@ from fp_multimodel.alignment import parse_textgrid
 from fp_multimodel.manifest import load_manifest, transcript_sha256
 from fp_multimodel.models import (
     AlignedInterval,
+    ExtendedParticleCandidate,
     ParticleDetectionResult,
     ParticleInstance,
     Transcript,
@@ -16,7 +17,10 @@ from fp_multimodel.models import (
     UtteranceAlignment,
 )
 from fp_multimodel.particles import detect_particles
-from fp_multimodel.vocab import PARTICLE_NORMALIZATION
+from fp_multimodel.vocab import (
+    EXTENDED_PARTICLE_CANDIDATES,
+    PARTICLE_NORMALIZATION,
+)
 
 
 def _find_textgrid(alignment_dir: Path, utterance: Utterance) -> Path:
@@ -67,12 +71,57 @@ def _to_source_timeline(
     )
 
 
+def _strip_trailing_nonlexical(text: str) -> str:
+    characters = list(text.strip())
+    while characters and (
+        characters[-1].isspace()
+        or unicodedata.category(characters[-1]).startswith("P")
+    ):
+        characters.pop()
+    return "".join(characters)
+
+
 def _final_surface_particle(utterance: Utterance) -> str | None:
-    for character in reversed(utterance.surface_text.strip()):
-        if character.isspace() or unicodedata.category(character).startswith("P"):
-            continue
-        return character if character in PARTICLE_NORMALIZATION else None
-    return None
+    text = _strip_trailing_nonlexical(utterance.surface_text)
+    if not text:
+        return None
+    final_character = text[-1]
+    return (
+        final_character
+        if final_character in PARTICLE_NORMALIZATION
+        else None
+    )
+
+
+def _final_surface_candidate(
+    utterance: Utterance,
+    normalized_candidate: str,
+) -> str | None:
+    text = _strip_trailing_nonlexical(utterance.surface_text)
+    if len(text) < len(normalized_candidate):
+        return None
+    surface_form = text[-len(normalized_candidate) :]
+    if surface_form.replace("嗎", "吗") != normalized_candidate:
+        return None
+    return surface_form
+
+
+def _expected_terminal_detection(
+    utterance: Utterance,
+) -> tuple[str, str] | None:
+    normalized_text = _strip_trailing_nonlexical(utterance.text)
+    candidate_matches = [
+        candidate
+        for candidate in EXTENDED_PARTICLE_CANDIDATES
+        if normalized_text.endswith(candidate)
+    ]
+    if candidate_matches:
+        return ("candidate", max(candidate_matches, key=len))
+
+    surface_form = _final_surface_particle(utterance)
+    if surface_form is None:
+        return None
+    return ("particle", PARTICLE_NORMALIZATION[surface_form])
 
 
 def _restore_particle_surface_forms(
@@ -80,7 +129,8 @@ def _restore_particle_surface_forms(
     transcript: Transcript,
 ) -> ParticleDetectionResult:
     utterances = {utterance.id: utterance for utterance in transcript.utterances}
-    restored: list[ParticleInstance] = []
+    restored_particles: list[ParticleInstance] = []
+    restored_candidates: list[ExtendedParticleCandidate] = []
 
     for particle in result.particles:
         surface_form = _final_surface_particle(utterances[particle.utterance_id])
@@ -92,7 +142,7 @@ def _restore_particle_surface_forms(
                 f"alignment final particle for {particle.utterance_id!r} does not "
                 "match the confirmed transcript"
             )
-        restored.append(
+        restored_particles.append(
             ParticleInstance.model_validate(
                 {
                     **particle.model_dump(),
@@ -101,7 +151,48 @@ def _restore_particle_surface_forms(
             )
         )
 
-    return ParticleDetectionResult(video_id=result.video_id, particles=restored)
+    for candidate in result.candidates:
+        surface_form = _final_surface_candidate(
+            utterances[candidate.utterance_id],
+            candidate.normalized_candidate,
+        )
+        if surface_form is None:
+            raise ValueError(
+                f"alignment final candidate for {candidate.utterance_id!r} does "
+                "not match the confirmed transcript"
+            )
+        restored_candidates.append(
+            ExtendedParticleCandidate.model_validate(
+                {
+                    **candidate.model_dump(),
+                    "surface_form": surface_form,
+                }
+            )
+        )
+
+    restored_result = ParticleDetectionResult(
+        video_id=result.video_id,
+        particles=restored_particles,
+        candidates=restored_candidates,
+    )
+    detections = {
+        detection.utterance_id: detection
+        for detection in [*restored_particles, *restored_candidates]
+    }
+    for utterance in transcript.utterances:
+        expected = _expected_terminal_detection(utterance)
+        if expected is None:
+            continue
+        detection = detections.get(utterance.id)
+        if detection is None:
+            kind, value = expected
+            raise ValueError(
+                f"alignment did not detect confirmed transcript {kind} "
+                f"{value!r} for utterance {utterance.id!r}; review the "
+                "alignment before continuing"
+            )
+
+    return restored_result
 
 
 def detect_from_mfa_output(

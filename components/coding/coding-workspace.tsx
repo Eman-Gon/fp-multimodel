@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { TimeRange } from "@/lib/types.ts";
 import {
   applyClipCommand,
@@ -26,9 +26,17 @@ import { VideoPlayer } from "./video-player.tsx";
 
 interface CodingWorkspaceProps {
   readonly initialClip: ClipDetail;
+  readonly nextClipId: string | null;
+  readonly queuePosition: number | null;
+  readonly queueTotal: number;
 }
 
-export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
+export function CodingWorkspace({
+  initialClip,
+  nextClipId,
+  queuePosition,
+  queueTotal,
+}: CodingWorkspaceProps) {
   const router = useRouter();
   const [clip, setClip] = useState(initialClip);
   const clipRef = useRef(initialClip);
@@ -212,9 +220,21 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
     }
   }, [router]);
 
+  const navigateToNext = useCallback(async () => {
+    try {
+      await saveQueueRef.current;
+      router.push(
+        nextClipId === null ? "/queue" : `/clips/${nextClipId}`,
+      );
+      router.refresh();
+    } catch {
+      setLiveMessage("Resolve the save error before leaving this clip.");
+    }
+  }, [nextClipId, router]);
+
   const confirmClip = useCallback(() => {
     if (clipRef.current.clip.status === "confirmed") {
-      void navigateToQueue();
+      void navigateToNext();
       return;
     }
     const currentSummary = summarizeReview(clipRef.current);
@@ -238,7 +258,7 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
     if (next !== null) {
       setLiveMessage("Clip confirmed. The reviewed coding is ready to store.");
     }
-  }, [focusTarget, navigateToQueue, runCommand, saveState]);
+  }, [focusTarget, navigateToNext, runCommand, saveState]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -271,11 +291,20 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
       } else if (key === "q") {
         event.preventDefault();
         void navigateToQueue();
+      } else if (key === "n") {
+        event.preventDefault();
+        void navigateToNext();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [confirmActive, navigateToQueue, player, skipActive]);
+  }, [
+    confirmActive,
+    navigateToNext,
+    navigateToQueue,
+    player,
+    skipActive,
+  ]);
 
   if (particle === undefined) {
     return (
@@ -309,9 +338,23 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
             <ChevronLeft aria-hidden="true" />
           </button>
           <div>
-            <span>Review clip</span>
+            <span>
+              {queuePosition === null
+                ? "Reviewed clip"
+                : `Clip ${queuePosition} of ${queueTotal}`}
+            </span>
             <small>Demo review · human confirmation</small>
           </div>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={
+              nextClipId === null ? "Return to coding queue" : "Next review clip"
+            }
+            onClick={() => void navigateToNext()}
+          >
+            <ChevronRight aria-hidden="true" />
+          </button>
         </div>
         <button
           type="button"
@@ -322,11 +365,15 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
           }
           onClick={
             clip.clip.status === "confirmed"
-              ? () => void navigateToQueue()
+              ? () => void navigateToNext()
               : confirmClip
           }
         >
-          {clip.clip.status === "confirmed" ? "Return to queue" : "Confirm clip"}
+          {clip.clip.status === "confirmed"
+            ? nextClipId === null
+              ? "Return to queue"
+              : "Next review clip"
+            : "Confirm clip"}
         </button>
       </header>
 
@@ -383,7 +430,8 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
             reviewField(target, review);
           }}
           onConfirmClip={confirmClip}
-          onReturnToQueue={() => void navigateToQueue()}
+          onReturnToQueue={() => void navigateToNext()}
+          hasNextClip={nextClipId !== null}
         />
       </div>
     </main>

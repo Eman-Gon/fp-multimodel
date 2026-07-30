@@ -66,15 +66,12 @@ export async function draftTrackBAnnotations(
       });
     const semanticGesture = parsePegasusGesture(rawSemanticGesture, window);
 
-    const motionIntervals =
-      semanticGesture.gesture_type === "none"
-        ? []
-        : await dependencies.motionAnalyzer.detectMotion({
-            video_id: request.video_id,
-            instance_id: particle.instance_id,
-            window,
-            semantic_gesture: semanticGesture,
-          });
+    const motionIntervals = await dependencies.motionAnalyzer.detectMotion({
+      video_id: request.video_id,
+      instance_id: particle.instance_id,
+      window,
+      semantic_gesture: semanticGesture,
+    });
 
     drafts.push(
       reconcileGestureDraft(

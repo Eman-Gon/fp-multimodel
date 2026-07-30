@@ -105,7 +105,7 @@ export function VideoPlayer({
         </div>
         <button
           type="button"
-          className="icon-button icon-button--dark"
+          className="icon-button icon-button--dark video-controls__mute"
           onClick={controller.toggleMuted}
           aria-label={controller.muted ? "Unmute clip" : "Mute clip"}
         >
@@ -133,4 +133,3 @@ export function VideoPlayer({
     </section>
   );
 }
-

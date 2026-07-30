@@ -12,24 +12,41 @@ export function MeaningContext({ clip }: MeaningContextProps) {
     return null;
   }
 
-  const token = currentValue(particle.fields.fp_token);
-  const tone = currentValue(clip.fields.tone_contour);
-  const sentenceType = currentValue(clip.fields.sentence_type);
-  const gesture = currentValue(particle.fields.gesture_type);
-  const meaning = currentValue(clip.fields.communicative_function);
-  const fpTiming = currentValue(particle.fields.fp_timing);
-  const gestureTiming = currentValue(particle.fields.gesture_timing);
-  const speakerId = currentValue(clip.fields.speaker_id);
-  const addresseeId = currentValue(clip.fields.addressee_id);
+  const tokenValue = reviewedValue(particle.fields.fp_token);
+  const token = tokenValue ?? "Skipped";
+  const toneValue = reviewedValue(clip.fields.tone_contour);
+  const sentenceTypeValue = reviewedValue(clip.fields.sentence_type);
+  const gesturePresent = reviewedValue(particle.fields.gesture_present);
+  const gestureType = reviewedValue(particle.fields.gesture_type);
+  const meaningValue = reviewedValue(clip.fields.communicative_function);
+  const fpTiming = reviewedValue(particle.fields.fp_timing);
+  const gestureTiming = reviewedValue(particle.fields.gesture_timing);
+  const speakerId = reviewedValue(clip.fields.speaker_id);
+  const addresseeId = reviewedValue(clip.fields.addressee_id);
   const speaker = participant(clip, speakerId);
   const addressee = participant(clip, addresseeId);
+  const tone = toneValue === null ? "Skipped" : humanize(toneValue);
+  const sentenceType =
+    sentenceTypeValue === null ? "Skipped" : humanize(sentenceTypeValue);
+  const gesture =
+    gesturePresent === false
+      ? "No gesture"
+      : gestureType === null
+        ? "Skipped"
+        : humanize(gestureType);
+  const meaning =
+    meaningValue === null ? "Skipped" : humanize(meaningValue);
 
   return (
     <section className="meaning-context" aria-labelledby="meaning-context-title">
       <header>
         <div>
           <h2 id="meaning-context-title">Meaning evidence</h2>
-          <p>Proposed interpretation—confirm each component before use.</p>
+          <p>
+            {clip.clip.status === "confirmed"
+              ? "Human-reviewed interpretation; skipped evidence stays explicit."
+              : "Proposed interpretation—confirm each component before use."}
+          </p>
         </div>
         <details className="clip-info">
           <summary aria-label="Show clip information">
@@ -59,14 +76,21 @@ export function MeaningContext({ clip }: MeaningContextProps) {
                 addressee.region_confirmed,
               )}
             />
-            <InfoItem label="Final particle" value={`${token} · ${particle.fp_pinyin}`} />
+            <InfoItem
+              label="Final particle"
+              value={
+                tokenValue === null
+                  ? "Skipped"
+                  : `${token} · ${particle.fp_pinyin}`
+              }
+            />
             <InfoItem
               label="FP time"
-              value={`${fpTiming.start_ms}–${fpTiming.end_ms} ms`}
+              value={formatRange(fpTiming)}
             />
             <InfoItem
               label="FP frames"
-              value={`${sourceMillisecondsToFrame(fpTiming.start_ms, clip.video.fps)}–${sourceMillisecondsToFrame(fpTiming.end_ms, clip.video.fps)}`}
+              value={formatFrames(fpTiming, clip.video.fps)}
             />
             <InfoItem
               label="Clip time"
@@ -74,10 +98,20 @@ export function MeaningContext({ clip }: MeaningContextProps) {
             />
             <InfoItem
               label="Gesture frames"
-              value={`${sourceMillisecondsToFrame(gestureTiming.start_ms, clip.video.fps)}–${sourceMillisecondsToFrame(gestureTiming.end_ms, clip.video.fps)}`}
+              value={
+                gesturePresent === false
+                  ? "Not applicable"
+                  : formatFrames(gestureTiming, clip.video.fps)
+              }
             />
-            <InfoItem label="FP count" value={String(currentValue(clip.fields.fp_count))} />
-            <InfoItem label="Sentence type" value={humanize(sentenceType)} />
+            <InfoItem
+              label="FP count"
+              value={String(
+                reviewedValue(clip.fields.fp_count) ??
+                  clip.particle_instances.length,
+              )}
+            />
+            <InfoItem label="Sentence type" value={sentenceType} />
           </dl>
         </details>
       </header>
@@ -85,35 +119,43 @@ export function MeaningContext({ clip }: MeaningContextProps) {
       <div className="meaning-equation" aria-label="Meaning evidence equation">
         <EvidenceTerm label="Particle" value={token} lang="zh-Hans" />
         <span aria-hidden="true">+</span>
-        <EvidenceTerm label="Tone" value={humanize(tone)} />
+        <EvidenceTerm label="Tone" value={tone} />
         <span aria-hidden="true">+</span>
-        <EvidenceTerm label="Sentence type" value={humanize(sentenceType)} />
+        <EvidenceTerm label="Sentence type" value={sentenceType} />
         <span aria-hidden="true">+</span>
-        <EvidenceTerm label="Gesture" value={humanize(gesture)} />
+        <EvidenceTerm label="Gesture" value={gesture} />
         <span className="meaning-equation__arrow" aria-hidden="true">
           →
         </span>
-        <EvidenceTerm label="Proposed meaning" value={humanize(meaning)} result />
+        <EvidenceTerm label="Proposed meaning" value={meaning} result />
       </div>
 
       <p className="meaning-context__explanation">
-        {currentValue(clip.fields.meaning_explanation)}
+        {textValue(
+          reviewedValue(clip.fields.meaning_explanation),
+          "Meaning explanation skipped by reviewer.",
+        )}
       </p>
 
       <div className="linguistic-context">
         <ContextItem
           label="Discourse"
-          value={currentValue(clip.fields.discourse_context)}
+          value={textValue(
+            reviewedValue(clip.fields.discourse_context),
+            "Skipped",
+          )}
         />
         <ContextItem label="Utterance" value={clip.utterance.text} lang="zh-Hans" />
         <ContextItem
           label="Sentence"
-          value={currentValue(clip.fields.sentence_text)}
+          value={textValue(reviewedValue(clip.fields.sentence_text), "Skipped")}
           lang="zh-Hans"
         />
         <ContextItem
           label="Clauses"
-          value={currentValue(clip.fields.clauses).join(" · ")}
+          value={
+            reviewedValue(clip.fields.clauses)?.join(" · ") ?? "Skipped"
+          }
           lang="zh-Hans"
         />
       </div>
@@ -165,14 +207,26 @@ function InfoItem({
   );
 }
 
-function currentValue<T>(field: ReviewField<T>): T {
+function reviewedValue<T>(field: ReviewField<T>): T | null {
+  if (field.state === "skipped") {
+    return null;
+  }
   return field.value ?? field.suggestion.value;
 }
 
 function participant(
   clip: ClipDetail,
-  participantId: string,
+  participantId: string | null,
 ): ClipDetail["participant_options"][number] {
+  if (participantId === null) {
+    return {
+      id: "skipped",
+      label: "Skipped",
+      region: null,
+      region_source: null,
+      region_confirmed: false,
+    };
+  }
   return (
     clip.participant_options.find(({ id }) => id === participantId) ?? {
       id: participantId,
@@ -182,6 +236,27 @@ function participant(
       region_confirmed: false,
     }
   );
+}
+
+function formatRange(
+  range: { readonly start_ms: number; readonly end_ms: number } | null,
+): string {
+  return range === null
+    ? "Skipped"
+    : `${range.start_ms}–${range.end_ms} ms`;
+}
+
+function formatFrames(
+  range: { readonly start_ms: number; readonly end_ms: number } | null,
+  fps: number,
+): string {
+  return range === null
+    ? "Skipped"
+    : `${sourceMillisecondsToFrame(range.start_ms, fps)}–${sourceMillisecondsToFrame(range.end_ms, fps)}`;
+}
+
+function textValue(value: string | null, fallback: string): string {
+  return value ?? fallback;
 }
 
 function formatRegion(

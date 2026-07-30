@@ -180,7 +180,7 @@ test("multi-particle review keys preserve instance pairing", () => {
   const first = base.particle_instances[0]!;
   const second = structuredClone(first);
   Object.assign(second, {
-    instance_id: "u18:fp:17200",
+    instance_id: "vid03:u18",
     surface_form: "呢",
     fp_pinyin: "ne",
   });

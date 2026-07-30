@@ -26,6 +26,9 @@ export function reconcileGestureDraft(
 ): GestureAnnotationDraft {
   assertNonEmptyId(videoId, "videoId");
   assertNonEmptyId(instanceId, "instanceId");
+  if (!instanceId.startsWith(`${videoId}:`)) {
+    throw new RangeError(`instanceId must belong to videoId ${videoId}`);
+  }
   assertTimeRange(analysisWindow, "analysisWindow");
   assertConfidence(semanticGesture.confidence, "semanticGesture.confidence");
 
@@ -72,10 +75,6 @@ export function reconcileGestureDraft(
     ) {
       throw new TypeError("none semantic gestures require a null region and segment");
     }
-    if (motionIntervals.length > 0) {
-      throw new TypeError("none semantic gestures cannot have motion intervals");
-    }
-
     return {
       video_id: videoId,
       instance_id: instanceId,

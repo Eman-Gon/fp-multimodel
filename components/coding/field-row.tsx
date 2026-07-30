@@ -37,12 +37,17 @@ export function FieldRow({
     field.suggestion.confidence === null
       ? null
       : Math.round(field.suggestion.confidence * 100);
+  const wasEdited =
+    field.state === "confirmed" && field.review?.action === "edited";
+  const suggestionSource = humanize(field.suggestion.source);
   const statusLabel =
     field.state === "suggested"
-      ? `AI suggested${confidence === null ? "" : `, ${confidence}% confidence`}`
+      ? `${suggestionSource} suggested${confidence === null ? "" : `, ${confidence}% confidence`}`
       : field.state === "confirmed"
-        ? "Confirmed by reviewer"
-        : "Explicitly skipped";
+        ? wasEdited
+          ? `Edited by reviewer; original ${suggestionSource} suggestion retained`
+          : `Confirmed by reviewer; original ${suggestionSource} suggestion retained`
+        : `Explicitly skipped; original ${suggestionSource} suggestion retained`;
 
   return (
     <div
@@ -93,7 +98,7 @@ export function FieldRow({
         {field.state === "suggested" && confidence !== null ? (
           <span>{confidence}%</span>
         ) : field.state === "confirmed" ? (
-          <span>Done</span>
+          <span>{wasEdited ? "Edited" : "Done"}</span>
         ) : (
           <span>Skipped</span>
         )}
@@ -114,4 +119,9 @@ export function FieldRow({
       ) : null}
     </div>
   );
+}
+
+function humanize(value: string): string {
+  const words = value.replaceAll("_", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }

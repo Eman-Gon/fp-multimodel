@@ -6,7 +6,6 @@ import { useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
-  Filter,
   RotateCcw,
 } from "lucide-react";
 import {
@@ -33,13 +32,11 @@ export function QueuePage({ clips, clipSummaries }: QueuePageProps) {
   const [speakerFilter, setSpeakerFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [videoFilter, setVideoFilter] = useState("");
+  const [confidenceFilter, setConfidenceFilter] = useState("");
   const [resetState, setResetState] = useState<ResetState>("idle");
   const pendingClips = clips.filter(
     ({ status }) => status === "draft" || status === "in_review",
   );
-  const priorityClip = pendingClips[0];
-  const prioritySummary =
-    priorityClip === undefined ? undefined : clipSummaries[priorityClip.id];
   const isComplete = pendingClips.length === 0;
   const summaryValues = Object.values(clipSummaries);
   const aggregateResolved = summaryValues.reduce(
@@ -50,27 +47,42 @@ export function QueuePage({ clips, clipSummaries }: QueuePageProps) {
     (total, summary) => total + summary.total,
     0,
   );
-  const resolved =
-    prioritySummary === undefined
-      ? aggregateResolved
-      : prioritySummary.confirmed + prioritySummary.skipped;
-  const total =
-    prioritySummary === undefined ? aggregateFields : prioritySummary.total;
-  const speakers = Array.from(
-    new Map(
-      clips.map((clip) => [clip.speaker_id, clip.speaker_label]),
-    ).entries(),
-  );
+  const speakers = clips.map((clip) => ({
+    key: `${clip.video_id}:${clip.speaker_id}`,
+    label: `${clip.speaker_label} · ${clip.video_id}`,
+  }));
   const videos = Array.from(new Set(clips.map(({ video_id }) => video_id)));
   const matchingClips = pendingClips.filter(
     (clip) =>
       (particleFilter === "" || particleFilter === clip.particle) &&
       (sentenceFilter === "" ||
         sentenceFilter === clip.sentence_type) &&
-      (speakerFilter === "" || speakerFilter === clip.speaker_id) &&
+      (speakerFilter === "" ||
+        speakerFilter === `${clip.video_id}:${clip.speaker_id}`) &&
       (statusFilter === "" || statusFilter === clip.status) &&
-      (videoFilter === "" || videoFilter === clip.video_id),
+      (videoFilter === "" || videoFilter === clip.video_id) &&
+      matchesConfidence(confidenceFilter, clip.lowest_confidence),
   );
+  const priorityClip = matchingClips[0];
+  const prioritySummary =
+    priorityClip === undefined ? undefined : clipSummaries[priorityClip.id];
+  const filtersActive =
+    particleFilter !== "" ||
+    sentenceFilter !== "" ||
+    speakerFilter !== "" ||
+    statusFilter !== "" ||
+    videoFilter !== "" ||
+    confidenceFilter !== "";
+  const resolved = isComplete
+    ? aggregateResolved
+    : prioritySummary === undefined
+      ? 0
+      : prioritySummary.confirmed + prioritySummary.skipped;
+  const total = isComplete
+    ? aggregateFields
+    : prioritySummary === undefined
+      ? 0
+      : prioritySummary.total;
 
   const resetDemo = async () => {
     setResetState("resetting");
@@ -84,6 +96,7 @@ export function QueuePage({ clips, clipSummaries }: QueuePageProps) {
       setSpeakerFilter("");
       setStatusFilter("");
       setVideoFilter("");
+      setConfidenceFilter("");
       setResetState("idle");
       router.refresh();
     } catch {
@@ -131,39 +144,62 @@ export function QueuePage({ clips, clipSummaries }: QueuePageProps) {
           <strong>
             {isComplete
               ? "All caught up"
-              : pendingClips.length === 1
-                ? "1 clip needs review"
-                : `${pendingClips.length} clips need review`}
+              : filtersActive
+                ? matchingClips.length === 1
+                  ? "1 matching clip"
+                  : `${matchingClips.length} matching clips`
+                : pendingClips.length === 1
+                  ? "1 clip needs review"
+                  : `${pendingClips.length} clips need review`}
           </strong>
           <small>
             {isComplete
               ? `${clips.length} demo clips confirmed`
-              : "Lowest confidence first"}
+              : filtersActive
+                ? `${pendingClips.length} total awaiting review`
+                : "Lowest confidence first"}
           </small>
         </div>
         <div>
-          <span>{isComplete ? "Corpus progress" : "Priority progress"}</span>
+          <span>
+            {isComplete
+              ? "Corpus progress"
+              : priorityClip === undefined
+                ? "Filtered progress"
+                : "Priority progress"}
+          </span>
           <strong>
             {resolved} / {total}
           </strong>
-          <small>Fields reviewed</small>
+          <small>
+            {!isComplete && priorityClip === undefined
+              ? "No matching clip"
+              : "Fields reviewed"}
+          </small>
         </div>
         <div>
-          <span>{isComplete ? "Result" : "Lowest confidence"}</span>
+          <span>
+            {isComplete
+              ? "Result"
+              : priorityClip === undefined
+                ? "Filter result"
+                : "Lowest confidence"}
+          </span>
           <strong>
             {isComplete
               ? "Confirmed"
-              : priorityClip?.lowest_confidence === null ||
-                  priorityClip?.lowest_confidence === undefined
-                ? "Needs review"
-                : `${Math.round(priorityClip.lowest_confidence * 100)}%`}
+              : priorityClip === undefined
+                ? "No match"
+                : priorityClip.lowest_confidence === null
+                  ? "Needs review"
+                  : `${Math.round(priorityClip.lowest_confidence * 100)}%`}
           </strong>
           <small>
             {isComplete
               ? "Ready for the corpus"
-              : `Proposed: ${humanize(
-                  priorityClip?.communicative_function ?? "AI suggestion",
-                )}`}
+              : priorityClip === undefined
+                ? "Adjust the filters to continue"
+                : `Proposed: ${humanize(priorityClip.communicative_function)}`}
           </small>
         </div>
       </div>
@@ -197,10 +233,20 @@ export function QueuePage({ clips, clipSummaries }: QueuePageProps) {
       ) : (
         <>
           <section className="queue-filters" aria-label="Queue filters">
-            <div className="queue-filters__label">
-              <Filter aria-hidden="true" />
-              <span>Filter queue</span>
-            </div>
+            <label>
+              <span>Confidence</span>
+              <select
+                value={confidenceFilter}
+                onChange={(event) =>
+                  setConfidenceFilter(event.currentTarget.value)
+                }
+              >
+                <option value="">All confidence</option>
+                <option value="under-65">Under 65%</option>
+                <option value="65-79">65–79%</option>
+                <option value="80-plus">80%+</option>
+              </select>
+            </label>
             <label>
               <span>Video</span>
               <select
@@ -256,8 +302,8 @@ export function QueuePage({ clips, clipSummaries }: QueuePageProps) {
                 }
               >
                 <option value="">All speakers</option>
-                {speakers.map(([id, label]) => (
-                  <option value={id} key={id}>
+                {speakers.map(({ key, label }) => (
+                  <option value={key} key={key}>
                     {label}
                   </option>
                 ))}
@@ -378,4 +424,23 @@ export function QueuePage({ clips, clipSummaries }: QueuePageProps) {
 function humanize(value: string): string {
   const words = value.replaceAll("_", " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function matchesConfidence(
+  filter: string,
+  confidence: number | null,
+): boolean {
+  if (filter === "") {
+    return true;
+  }
+  if (confidence === null) {
+    return false;
+  }
+  if (filter === "under-65") {
+    return confidence < 0.65;
+  }
+  if (filter === "65-79") {
+    return confidence >= 0.65 && confidence < 0.8;
+  }
+  return confidence >= 0.8;
 }

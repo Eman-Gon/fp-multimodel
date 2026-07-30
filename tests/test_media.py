@@ -29,9 +29,12 @@ def video_probe(*, fps: str = "30/1", duration: str = "2.3456") -> dict[str, Any
                 "codec_type": "video",
                 "avg_frame_rate": fps,
                 "r_frame_rate": fps,
+                "duration": duration,
             }
         ],
-        "format": {"duration": duration},
+        # Container duration may include audio padding; the video stream is the
+        # canonical visible timeline.
+        "format": {"duration": "2.4000"},
     }
 
 

@@ -10,8 +10,10 @@ import type { TimeRange } from "../types.ts";
 import type {
   ClipCommand,
   ClipDetail,
+  ClipFieldName,
   FieldTarget,
   ParticleReview,
+  ParticleFieldName,
   ReviewDecision,
   ReviewField,
   ReviewSummary,
@@ -21,6 +23,31 @@ import type {
 const PARTICLE_PINYIN = new Map(
   TARGET_PARTICLES.map(({ token, pinyin }) => [token, pinyin]),
 );
+
+const ABSENT_GESTURE_REASON =
+  "Not applicable because the reviewer marked the gesture absent.";
+
+const CLIP_FIELD_NAMES = new Set<ClipFieldName>([
+  "speaker_id",
+  "addressee_id",
+  "fp_count",
+  "sentence_type",
+  "tone_contour",
+  "discourse_context",
+  "sentence_text",
+  "clauses",
+  "communicative_function",
+  "meaning_explanation",
+]);
+
+const PARTICLE_FIELD_NAMES = new Set<ParticleFieldName>([
+  "fp_token",
+  "fp_timing",
+  "gesture_present",
+  "gesture_type",
+  "gesture_region",
+  "gesture_timing",
+]);
 
 export class ReviewCommandError extends Error {
   readonly code: string;
@@ -34,6 +61,21 @@ export class ReviewCommandError extends Error {
     this.status = status;
     this.details = details;
   }
+}
+
+export function isFieldTarget(value: unknown): value is FieldTarget {
+  if (!isRecord(value) || typeof value.field !== "string") {
+    return false;
+  }
+  if (value.scope === "clip") {
+    return CLIP_FIELD_NAMES.has(value.field as ClipFieldName);
+  }
+  return (
+    value.scope === "particle" &&
+    typeof value.instance_id === "string" &&
+    value.instance_id.trim().length > 0 &&
+    PARTICLE_FIELD_NAMES.has(value.field as ParticleFieldName)
+  );
 }
 
 export function targetKey(target: FieldTarget): string {
@@ -111,6 +153,8 @@ export function applyClipCommand(
     );
   }
 
+  validateDerivedFpCount(current);
+
   if (
     current.clip.status === "confirmed" &&
     command.command === "review_field"
@@ -119,6 +163,17 @@ export function applyClipCommand(
       "CLIP_CONFIRMED_READ_ONLY",
       "Confirmed coding is read-only. Reset the demo before making another review pass.",
       409,
+    );
+  }
+
+  if (
+    command.command === "review_field" &&
+    command.target.scope === "clip" &&
+    command.target.field === "fp_count"
+  ) {
+    throw new ReviewCommandError(
+      "DERIVED_FIELD",
+      "FP count is derived from particle instances and cannot be reviewed, edited, or skipped.",
     );
   }
 
@@ -202,6 +257,14 @@ export function applyClipCommand(
     };
   }
 
+  reconcileGestureDependencies(
+    next,
+    command.target,
+    reviewerId,
+    reviewedAt,
+  );
+  validateResolvedGestureSemantics(next);
+
   if (next.clip.status === "draft") {
     next.clip.status = "in_review";
   }
@@ -253,11 +316,33 @@ function findReviewField(
   clip: ClipDetail,
   target: FieldTarget,
 ): ReviewField<unknown> {
+  if (!isFieldTarget(target)) {
+    throw new ReviewCommandError(
+      "INVALID_FIELD_TARGET",
+      "The requested review field is not supported.",
+      400,
+    );
+  }
+
   if (target.scope === "clip") {
+    if (!Object.prototype.hasOwnProperty.call(clip.fields, target.field)) {
+      throw new ReviewCommandError(
+        "INVALID_FIELD_TARGET",
+        "The requested clip review field does not exist.",
+        400,
+      );
+    }
     return clip.fields[target.field] as ReviewField<unknown>;
   }
 
   const particle = findParticle(clip, target.instance_id);
+  if (!Object.prototype.hasOwnProperty.call(particle.fields, target.field)) {
+    throw new ReviewCommandError(
+      "INVALID_FIELD_TARGET",
+      "The requested particle review field does not exist.",
+      400,
+    );
+  }
   return particle.fields[target.field] as ReviewField<unknown>;
 }
 
@@ -370,7 +455,7 @@ function validateFieldValue(
     target.field === "fp_timing" ||
     target.field === "gesture_timing"
   ) {
-    validateTimeRange(value, clip.video.duration_ms);
+    validateTimeRange(value, clip);
   } else if (target.field === "gesture_present") {
     if (typeof value !== "boolean") {
       throw new ReviewCommandError(
@@ -397,7 +482,7 @@ function validateFieldValue(
   }
 }
 
-function validateTimeRange(value: unknown, durationMs: number): void {
+function validateTimeRange(value: unknown, clip: ClipDetail): void {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new ReviewCommandError(
       "INVALID_TIME_RANGE",
@@ -412,24 +497,130 @@ function validateTimeRange(value: unknown, durationMs: number): void {
     range.end_ms === undefined ||
     range.start_ms < 0 ||
     range.end_ms <= range.start_ms ||
-    range.end_ms > durationMs
+    range.end_ms > clip.video.duration_ms ||
+    range.start_ms < clip.clip.start_ms ||
+    range.end_ms > clip.clip.end_ms
   ) {
     throw new ReviewCommandError(
       "INVALID_TIME_RANGE",
-      "Timing must be an ordered integer-millisecond range inside the source video.",
+      "Timing must be an ordered integer-millisecond range inside the clip on the source-video timeline.",
     );
   }
+}
+
+function validateDerivedFpCount(clip: ClipDetail): void {
+  const expectedCount = clip.particle_instances.length;
+  const field = clip.fields.fp_count;
+  if (
+    field.state !== "confirmed" ||
+    field.value !== expectedCount ||
+    field.suggestion.value !== expectedCount ||
+    field.suggestion.source !== "derived"
+  ) {
+    throw new ReviewCommandError(
+      "INVALID_DERIVED_FP_COUNT",
+      `FP count must remain the derived particle-instance count (${expectedCount}).`,
+      422,
+      { expected_count: expectedCount },
+    );
+  }
+}
+
+function reconcileGestureDependencies(
+  clip: ClipDetail,
+  target: FieldTarget,
+  reviewerId: string,
+  reviewedAt: string,
+): void {
+  if (
+    target.scope !== "particle" ||
+    target.field !== "gesture_present"
+  ) {
+    return;
+  }
+
+  const particle = findParticle(clip, target.instance_id);
+  const present = particle.fields.gesture_present;
+  if (present.state !== "confirmed") {
+    return;
+  }
+
+  const type = particle.fields.gesture_type;
+  if (present.value === false) {
+    if (
+      type.state !== "skipped" &&
+      !(type.state === "confirmed" && type.value === "none")
+    ) {
+      type.value = "none";
+      type.state = "confirmed";
+      type.review = {
+        ...decision(
+          isSameValue("none", type.suggestion.value) ? "accepted" : "edited",
+          reviewerId,
+          reviewedAt,
+        ),
+        reason: ABSENT_GESTURE_REASON,
+      };
+    }
+    skipGestureDependentField(
+      particle.fields.gesture_region,
+      reviewerId,
+      reviewedAt,
+    );
+    skipGestureDependentField(
+      particle.fields.gesture_timing,
+      reviewerId,
+      reviewedAt,
+    );
+  } else if (
+    present.value === true
+  ) {
+    restoreAutoResolvedGestureField(type);
+    restoreAutoResolvedGestureField(particle.fields.gesture_region);
+    restoreAutoResolvedGestureField(particle.fields.gesture_timing);
+  }
+}
+
+function skipGestureDependentField(
+  field: ReviewField<unknown>,
+  reviewerId: string,
+  reviewedAt: string,
+): void {
+  if (field.state === "skipped") {
+    return;
+  }
+  field.value = null;
+  field.state = "skipped";
+  field.review = {
+    ...decision("skipped", reviewerId, reviewedAt),
+    reason: ABSENT_GESTURE_REASON,
+  };
+}
+
+function restoreAutoResolvedGestureField(field: ReviewField<unknown>): void {
+  if (field.review?.reason !== ABSENT_GESTURE_REASON) {
+    return;
+  }
+  field.value = structuredClone(field.suggestion.value);
+  field.state = "suggested";
+  field.review = null;
 }
 
 function validateResolvedGestureSemantics(clip: ClipDetail): void {
   for (const particle of clip.particle_instances) {
     const present = particle.fields.gesture_present;
     const type = particle.fields.gesture_type;
+    const region = particle.fields.gesture_region;
+    const timing = particle.fields.gesture_timing;
+    if (present.state !== "confirmed") {
+      continue;
+    }
     if (
-      present.state === "confirmed" &&
-      type.state === "confirmed" &&
       present.value === false &&
-      type.value !== "none"
+      !(
+        type.state === "skipped" ||
+        (type.state === "confirmed" && type.value === "none")
+      )
     ) {
       throw new ReviewCommandError(
         "GESTURE_STATE_CONFLICT",
@@ -437,7 +628,15 @@ function validateResolvedGestureSemantics(clip: ClipDetail): void {
       );
     }
     if (
-      present.state === "confirmed" &&
+      present.value === false &&
+      (region.state !== "skipped" || timing.state !== "skipped")
+    ) {
+      throw new ReviewCommandError(
+        "GESTURE_STATE_CONFLICT",
+        "A confirmed absent gesture must skip gesture region and timing as not applicable.",
+      );
+    }
+    if (
       type.state === "confirmed" &&
       present.value === true &&
       type.value === "none"
@@ -459,4 +658,8 @@ function includesString(
 
 function isSameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

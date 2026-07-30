@@ -128,6 +128,24 @@ export interface ClipListItem {
   readonly duration_ms: number;
 }
 
+/**
+ * A corpus-facing projection. Required grouping values come only from
+ * human-confirmed review fields; optional display metadata stays nullable
+ * instead of falling back to a skipped model suggestion.
+ */
+export interface ConfirmedExplorerClipListItem {
+  readonly id: string;
+  readonly name: string;
+  readonly video_id: string;
+  readonly transcript: string;
+  readonly particle: ParticleToken;
+  readonly particle_pinyin: string;
+  readonly communicative_function: CommunicativeFunction;
+  readonly sentence_type: SentenceType | null;
+  readonly speaker_label: string | null;
+  readonly status: "confirmed";
+}
+
 export interface VideoSourceReference {
   readonly id: string;
   readonly platform: "youtube" | "local" | "other";

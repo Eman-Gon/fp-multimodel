@@ -200,7 +200,7 @@ The provider-independent B1–B3 core lives in `lib/track-b`. It currently:
 - handles every FP instance independently for multi-particle videos
 - analyzes multiple videos concurrently without mixing source timelines
 - returns completed or failed status per video so failed provider calls can be
-  retried without discarding completed results
+  retried without rerunning completed videos
 
 The concrete TwelveLabs client and batched Python MediaPipe worker are the next
 integration step. The core uses small provider interfaces so API credentials

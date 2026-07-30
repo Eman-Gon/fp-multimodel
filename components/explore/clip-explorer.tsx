@@ -8,12 +8,12 @@ import {
   TARGET_PARTICLES,
 } from "@/lib/vocab.ts";
 import type {
-  ClipListItem,
+  ConfirmedExplorerClipListItem,
   VideoSourceReference,
 } from "@/lib/track-c/types.ts";
 
 interface ClipExplorerProps {
-  readonly clips: readonly ClipListItem[];
+  readonly clips: readonly ConfirmedExplorerClipListItem[];
   readonly sourceReferences: readonly VideoSourceReference[];
 }
 
@@ -41,14 +41,14 @@ export function ClipExplorer({
         <div>
           <h1>Particle and meaning explorer</h1>
           <p>
-            Browse clips across every uploaded video, then narrow the corpus by
-            particle and proposed communicative function.
+            Browse human-confirmed clips across source videos, then narrow the
+            reviewed corpus by particle and communicative function.
           </p>
         </div>
         <div className="explorer-project-count">
           <Layers3 aria-hidden="true" />
           <strong>{new Set(clips.map(({ video_id }) => video_id)).size}</strong>
-          <span>source videos</span>
+          <span>videos in reviewed clips</span>
         </div>
       </header>
 
@@ -85,6 +85,7 @@ export function ClipExplorer({
         <button
           type="button"
           className={particle === "" ? "is-selected" : undefined}
+          aria-pressed={particle === ""}
           onClick={() => {
             setParticle("");
             setMeaning("");
@@ -99,6 +100,7 @@ export function ClipExplorer({
             <button
               type="button"
               className={particle === token ? "is-selected" : undefined}
+              aria-pressed={particle === token}
               onClick={() => {
                 setParticle(token);
                 setMeaning("");
@@ -133,18 +135,20 @@ export function ClipExplorer({
 
       <section className="meaning-filter" aria-labelledby="meaning-filter-title">
         <div>
-          <h2 id="meaning-filter-title">
-            Proposed meanings in this selection
-          </h2>
-          <p>Counts reflect the current demo records, not linguistic findings.</p>
+          <h2 id="meaning-filter-title">Reviewed meanings in this selection</h2>
+          <p>
+            Counts include confirmed review values only and are not linguistic
+            findings.
+          </p>
         </div>
         <div>
           <button
             type="button"
             className={meaning === "" ? "is-selected" : undefined}
+            aria-pressed={meaning === ""}
             onClick={() => setMeaning("")}
           >
-            All proposed meanings <span>{particleClips.length}</span>
+            All reviewed meanings <span>{particleClips.length}</span>
           </button>
           {meanings.map((item) => {
             const count = particleClips.filter(
@@ -154,6 +158,7 @@ export function ClipExplorer({
               <button
                 type="button"
                 className={meaning === item ? "is-selected" : undefined}
+                aria-pressed={meaning === item}
                 onClick={() => setMeaning(item)}
                 key={item}
               >
@@ -164,7 +169,11 @@ export function ClipExplorer({
         </div>
       </section>
 
-      <section className="explorer-results" aria-labelledby="explorer-results-title">
+      <section
+        className="explorer-results"
+        id="explorer-results"
+        aria-labelledby="explorer-results-title"
+      >
         <header>
           <h2 id="explorer-results-title">
             {visibleClips.length} matching{" "}
@@ -172,27 +181,50 @@ export function ClipExplorer({
           </h2>
         </header>
         <div className="explorer-list">
-          {visibleClips.map((clip) => (
-            <article key={clip.id}>
-              <div className="explorer-list__particle" lang="zh-Hans">
-                {clip.particle}
-              </div>
-              <div>
-                <span>
-                  {clip.video_id} · {humanize(clip.communicative_function)}
-                </span>
-                <h3 lang="zh-Hans">{clip.transcript}</h3>
-                <p>
-                  {humanize(clip.sentence_type)} · {clip.speaker_label} ·{" "}
-                  {humanize(clip.status)}
-                </p>
-              </div>
-              <Link href={`/clips/${clip.id}`} prefetch={false}>
-                View evidence
-                <ArrowRight aria-hidden="true" />
-              </Link>
-            </article>
-          ))}
+          {visibleClips.length === 0 ? (
+            <div className="explorer-empty" role="status">
+              <h3>
+                {clips.length === 0
+                  ? "No confirmed clips yet."
+                  : "No confirmed clips match these filters."}
+              </h3>
+              <p>
+                {clips.length === 0
+                  ? "Complete the coding queue to add human-reviewed demo clips to this explorer."
+                  : "Choose another particle or reviewed meaning to see the confirmed corpus."}
+              </p>
+              {clips.length === 0 ? (
+                <Link href="/queue" prefetch={false}>
+                  Review coding queue
+                  <ArrowRight aria-hidden="true" />
+                </Link>
+              ) : null}
+            </div>
+          ) : (
+            visibleClips.map((clip) => (
+              <article key={clip.id}>
+                <div className="explorer-list__particle" lang="zh-Hans">
+                  {clip.particle}
+                </div>
+                <div>
+                  <span>
+                    {clip.video_id} · {humanize(clip.communicative_function)}
+                  </span>
+                  <h3 lang="zh-Hans">{clip.transcript}</h3>
+                  <p>
+                    {clip.sentence_type === null
+                      ? "Sentence type not reviewed"
+                      : humanize(clip.sentence_type)}{" "}
+                    · {clip.speaker_label ?? "Speaker not reviewed"} · Confirmed
+                  </p>
+                </div>
+                <Link href={`/clips/${clip.id}`} prefetch={false}>
+                  View evidence
+                  <ArrowRight aria-hidden="true" />
+                </Link>
+              </article>
+            ))
+          )}
         </div>
       </section>
     </main>

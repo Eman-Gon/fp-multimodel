@@ -125,7 +125,7 @@ export function createDemoClip(): ClipDetail {
     },
     particle_instances: [
       {
-        instance_id: "u17:fp:14310",
+        instance_id: "vid03:u17",
         surface_form: "嗎",
         fp_pinyin: "ma",
         fields: {
@@ -180,7 +180,7 @@ export function createSecondDemoClip(): ClipDetail {
   );
 
   const particle = second.particle_instances[0]!;
-  particle.instance_id = "u09:fp:8640";
+  particle.instance_id = "vid04:u09";
   particle.surface_form = "吧";
   particle.fp_pinyin = "ba";
   particle.fields.fp_token = confirmed("吧", "mfa", 0.98);

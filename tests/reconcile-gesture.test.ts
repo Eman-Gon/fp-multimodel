@@ -11,7 +11,7 @@ const analysisWindow = { start_ms: 2_000, end_ms: 6_000 };
 test("keeps Pegasus semantics and uses the nearest coherent MediaPipe interval", () => {
   const draft = reconcileGestureDraft(
     "vid1",
-    "fp-1",
+    "vid1:u1",
     analysisWindow,
     {
       gesture_type: "head_nod",
@@ -56,7 +56,7 @@ test("keeps Pegasus semantics and uses the nearest coherent MediaPipe interval",
 test("falls back honestly to coarse Pegasus timing when no motion overlaps", () => {
   const draft = reconcileGestureDraft(
     "vid1",
-    "fp-1",
+    "vid1:u1",
     analysisWindow,
     {
       gesture_type: "open_palm",
@@ -78,7 +78,7 @@ test("falls back honestly to coarse Pegasus timing when no motion overlaps", () 
 test("a none result never invents region or timestamps", () => {
   const draft = reconcileGestureDraft(
     "vid1",
-    "fp-1",
+    "vid1:u1",
     analysisWindow,
     {
       gesture_type: "none",
@@ -100,7 +100,7 @@ test("rejects contradictory none inputs at the public reconciliation boundary", 
     () =>
       reconcileGestureDraft(
         "vid1",
-        "fp-1",
+        "vid1:u1",
         analysisWindow,
         {
           gesture_type: "none",
@@ -113,11 +113,31 @@ test("rejects contradictory none inputs at the public reconciliation boundary", 
     /require a null region and segment/,
   );
 
+  const disagreement = reconcileGestureDraft(
+    "vid1",
+    "vid1:u1",
+    analysisWindow,
+    {
+      gesture_type: "none",
+      gesture_region: null,
+      segment: null,
+      confidence: 0.8,
+    },
+    [{ start_ms: 3_000, end_ms: 3_200 }],
+  );
+  assert.equal(disagreement.gesture_present.value, false);
+  assert.equal(disagreement.gesture_boundaries.value, null);
+  assert.deepEqual(disagreement.model_evidence.mediapipe_intervals, [
+    { start_ms: 3_000, end_ms: 3_200 },
+  ]);
+});
+
+test("public reconciliation rejects a cross-video instance identity", () => {
   assert.throws(
     () =>
       reconcileGestureDraft(
         "vid1",
-        "fp-1",
+        "vid2:u1",
         analysisWindow,
         {
           gesture_type: "none",
@@ -125,9 +145,9 @@ test("rejects contradictory none inputs at the public reconciliation boundary", 
           segment: null,
           confidence: 0.8,
         },
-        [{ start_ms: 3_000, end_ms: 3_200 }],
+        [],
       ),
-    /cannot have motion intervals/,
+    /must belong to videoId vid1/,
   );
 });
 

@@ -113,7 +113,9 @@ def _parse_duration_ms(
         if isinstance(format_metadata, dict)
         else None
     )
-    raw_duration = format_duration or stream.get("duration")
+    # Prefer the picture stream: container duration can be slightly longer
+    # because of AAC priming/padding and should not extend the video timeline.
+    raw_duration = stream.get("duration") or format_duration
     try:
         duration_seconds = Decimal(str(raw_duration))
     except (InvalidOperation, ValueError) as error:

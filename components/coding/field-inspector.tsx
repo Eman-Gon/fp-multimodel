@@ -31,6 +31,7 @@ interface FieldInspectorProps {
   readonly onReview: (target: FieldTarget, review: FieldReview) => void;
   readonly onConfirmClip: () => void;
   readonly onReturnToQueue: () => void;
+  readonly hasNextClip: boolean;
 }
 
 export function FieldInspector({
@@ -43,6 +44,7 @@ export function FieldInspector({
   onReview,
   onConfirmClip,
   onReturnToQueue,
+  hasNextClip,
 }: FieldInspectorProps) {
   const particle = clip.particle_instances[0];
   if (particle === undefined) {
@@ -93,9 +95,10 @@ export function FieldInspector({
         </div>
       </header>
 
-      <div
+      <fieldset
         className={`field-inspector__body${clip.clip.status === "confirmed" ? " field-inspector__body--read-only" : ""}`}
-        inert={clip.clip.status === "confirmed"}
+        disabled={clip.clip.status === "confirmed"}
+        aria-label="Reviewable coding fields"
       >
         <InspectorSection title="Participants">
         <FieldRow
@@ -234,19 +237,6 @@ export function FieldInspector({
                 action: "edit",
                 value: nextPresent,
               });
-              if (!nextPresent) {
-                review(particleTarget("gesture_type"), {
-                  action: "edit",
-                  value: "none",
-                });
-              } else if (
-                currentValue(particle.fields.gesture_type) === "none"
-              ) {
-                review(particleTarget("gesture_type"), {
-                  action: "edit",
-                  value: particle.fields.gesture_type.suggestion.value,
-                });
-              }
             }}
           >
             {currentValue(particle.fields.gesture_present) ? (
@@ -517,7 +507,7 @@ export function FieldInspector({
             />
           </FieldRow>
         </InspectorSection>
-      </div>
+      </fieldset>
 
       <footer className="review-footer">
         <div className="review-footer__summary">
@@ -563,6 +553,9 @@ export function FieldInspector({
             <kbd>Q</kbd> queue
           </span>
           <span>
+            <kbd>N</kbd> next clip
+          </span>
+          <span>
             <kbd>,</kbd>
             <kbd>.</kbd> step frame
           </span>
@@ -573,7 +566,7 @@ export function FieldInspector({
             className="button button--confirm"
             onClick={onReturnToQueue}
           >
-            Return to cleared queue
+            {hasNextClip ? "Next review clip" : "Return to cleared queue"}
           </button>
         ) : (
           <button

@@ -1,5 +1,6 @@
 import { getClipById, updateClip } from "@/lib/track-c/repository.ts";
 import {
+  isFieldTarget,
   ReviewCommandError,
   summarizeReview,
 } from "@/lib/track-c/review.ts";
@@ -89,19 +90,9 @@ function isClipCommand(value: unknown): value is ClipCommand {
   }
   if (
     value.command !== "review_field" ||
-    !isRecord(value.target) ||
+    !isFieldTarget(value.target) ||
     !isRecord(value.review)
   ) {
-    return false;
-  }
-
-  const target = value.target;
-  const validTarget =
-    (target.scope === "clip" && typeof target.field === "string") ||
-    (target.scope === "particle" &&
-      typeof target.instance_id === "string" &&
-      typeof target.field === "string");
-  if (!validTarget) {
     return false;
   }
 
@@ -134,4 +125,3 @@ function errorResponse(
     { status, headers: NO_STORE_HEADERS },
   );
 }
-

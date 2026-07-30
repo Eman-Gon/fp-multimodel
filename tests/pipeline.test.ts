@@ -71,7 +71,9 @@ test("drafts each particle in a multi-particle video under its own instance_id",
       motionAnalyzer: {
         async detectMotion(request) {
           motionCalls.push(request);
-          return [{ start_ms: 3_900, end_ms: 4_250, confidence: 0.72 }];
+          return request.semantic_gesture.gesture_type === "none"
+            ? [{ start_ms: 9_900, end_ms: 10_150, confidence: 0.41 }]
+            : [{ start_ms: 3_900, end_ms: 4_250, confidence: 0.72 }];
         },
       },
     },
@@ -86,11 +88,14 @@ test("drafts each particle in a multi-particle video under its own instance_id",
     ["vid-03", "vid-03"],
   );
   assert.equal(semanticCalls.length, 2);
-  assert.equal(motionCalls.length, 1);
+  assert.equal(motionCalls.length, 2);
   assert.equal(semanticCalls[0]!.particle.fp_token, "呢");
   assert.equal(motionCalls[0]!.semantic_gesture.gesture_type, "head_tilt");
   assert.equal(drafts[0]!.gesture_boundaries.source, "mediapipe");
   assert.equal(drafts[1]!.gesture_boundaries.value, null);
+  assert.deepEqual(drafts[1]!.model_evidence.mediapipe_intervals, [
+    { start_ms: 9_900, end_ms: 10_150, confidence: 0.41 },
+  ]);
   assert.deepEqual(drafts[0]!.model_evidence, {
     pegasus: {
       gesture_type: "head_tilt",
@@ -268,7 +273,7 @@ test("batch analysis rejects duplicate video ids", async () => {
   );
 });
 
-test("batch analysis isolates provider failures for per-video retry", async () => {
+test("batch analysis isolates downstream MediaPipe failures for per-video retry", async () => {
   const result = await draftTrackBBatchAnnotations(
     {
       project_id: "project-1",
@@ -310,21 +315,21 @@ test("batch analysis isolates provider failures for per-video retry", async () =
     {
       semanticAnalyzer: {
         async analyzeGesture(request) {
-          if (request.video_id === "vid1") {
-            throw new Error("Pegasus temporarily unavailable");
-          }
           return {
-            gesture_type: "none",
-            gesture_region: null,
-            start_ms: null,
-            end_ms: null,
+            gesture_type: "head_nod",
+            gesture_region: "face",
+            start_ms: request.particle.fp_start_ms + 50,
+            end_ms: request.particle.fp_end_ms - 50,
             confidence: 0.75,
           };
         },
       },
       motionAnalyzer: {
-        async detectMotion() {
-          return [];
+        async detectMotion(request) {
+          if (request.video_id === "vid1") {
+            throw new Error("MediaPipe worker temporarily unavailable");
+          }
+          return [{ start_ms: 2_050, end_ms: 2_150, confidence: 0.7 }];
         },
       },
     },
@@ -335,7 +340,7 @@ test("batch analysis isolates provider failures for per-video retry", async () =
       video_id: "vid1",
       status: "failed",
       annotations: [],
-      error_message: "Pegasus temporarily unavailable",
+      error_message: "MediaPipe worker temporarily unavailable",
     },
     {
       video_id: "vid2",
@@ -346,37 +351,39 @@ test("batch analysis isolates provider failures for per-video retry", async () =
           instance_id: "vid2:u1",
           analysis_window: { start_ms: 0, end_ms: 4_200 },
           gesture_present: {
-            value: false,
+            value: true,
             confidence: 0.75,
             source: "pegasus",
             confirmed: false,
           },
           gesture_type: {
-            value: "none",
+            value: "head_nod",
             confidence: 0.75,
             source: "pegasus",
             confirmed: false,
           },
           gesture_region: {
-            value: null,
+            value: "face",
             confidence: 0.75,
             source: "pegasus",
             confirmed: false,
           },
           gesture_boundaries: {
-            value: null,
-            confidence: 0.75,
-            source: "pegasus",
+            value: { start_ms: 2_050, end_ms: 2_150 },
+            confidence: 0.7,
+            source: "mediapipe",
             confirmed: false,
           },
           model_evidence: {
             pegasus: {
-              gesture_type: "none",
-              gesture_region: null,
-              segment: null,
+              gesture_type: "head_nod",
+              gesture_region: "face",
+              segment: { start_ms: 2_050, end_ms: 2_150 },
               confidence: 0.75,
             },
-            mediapipe_intervals: [],
+            mediapipe_intervals: [
+              { start_ms: 2_050, end_ms: 2_150, confidence: 0.7 },
+            ],
           },
         },
       ],
