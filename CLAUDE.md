@@ -10,6 +10,14 @@ Linguistics research assistants currently annotate gesture–particle data by ha
 
 **Framing: AI drafts, humans confirm.** Never present AI output as ground truth. Every AI-generated field must be visually distinguishable from a human-confirmed one in the UI.
 
+**Definitions:**
+
+- **FP** means sentence-final particle.
+- **Meaning** is a context-sensitive communicative interpretation grounded in
+  the hierarchy of discourse, utterance, sentence, and clause together with
+  particle, tone, sentence type, and gesture evidence. It is not inferred from
+  the particle alone.
+
 ---
 
 ## Target Final Particles
@@ -309,7 +317,10 @@ already exist.
 ### C1. Transcript Review page
 - Utterance list, editable text field per utterance
 - Target FPs highlighted inline in the draft text
+- In read-only transcript presentation, render the exact observed FP token in
+  bold without inserting formatting markers into the stored transcript
 - Speaker assignment dropdown per utterance
+- Addressee assignment and the final sentence containing the FP
 - Low-confidence utterances flagged for attention
 - "Approve & align" button → triggers `/api/align`
 
@@ -373,6 +384,7 @@ Video(id, source, duration_ms, fps)
 Utterance(id, text, start_ms, end_ms, transcript_confirmed: bool)
 Clip(id, name, start_ms, end_ms, status, fp_count)
 Speaker(id, label)
+ParticipantBackground(participant_id, region, dialect, source, confirmed)
 Particle(token, pinyin)
 Gesture(type, region)          # canonical per type+region combo
 SentenceType(label)
@@ -387,6 +399,7 @@ Tone(contour)
 (Clip)-[:FROM_UTTERANCE]->(Utterance)
 (Clip)-[:SPOKEN_BY]->(Speaker)
 (Clip)-[:ADDRESSED_TO {confirmed: bool}]->(Speaker)
+(Speaker)-[:HAS_BACKGROUND]->(ParticipantBackground)
 (Clip)-[:CONTAINS_PARTICLE {
     instance_id, start_ms, end_ms, surface_form, confirmed
 }]->(Particle)
@@ -475,6 +488,9 @@ When changing shared contracts:
 3. Treat `FP_count` as derived from particle instances.
 4. Add or update both Python and TypeScript tests when behavior crosses the
    Track A/Track B boundary.
+5. Persist production review work through a repository or data-file boundary;
+   component state alone is not an annotation record. In-memory fixtures are
+   acceptable only when clearly labeled as non-persistent demo data.
 
 ---
 

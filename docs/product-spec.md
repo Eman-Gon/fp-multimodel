@@ -18,6 +18,12 @@ particles as utterance-final emphasis and stance cues, then understand how
 their interpretation changes with tone, sentence type, discourse context, and
 visible gesture.
 
+In this specification, **FP** means sentence-final particle. **Meaning** is a
+context-sensitive communicative interpretation grounded in the hierarchical
+organization of discourse, utterance, sentence, and clause. It must be
+supported by the particle, tone, sentence type/context, and gesture evidence
+rather than derived from the particle alone.
+
 ## Target particles
 
 The controlled target inventory is:
@@ -214,6 +220,8 @@ The machine-readable record is
 ### Transcript review
 
 - displays ASR utterances alongside the source media
+- shows the exact observed FP token in bold in read-only presentation without
+  storing formatting markers in the canonical transcript
 - requires correction and explicit confirmation
 - blocks alignment until every included utterance is confirmed
 
@@ -234,6 +242,8 @@ The machine-readable record is
   origin and verification state, final particle, particle start and end, clip
   start and end, `FP_count`, and sentence type
 - explicit confirmation before a clip enters the reviewed corpus
+- durable saving through a repository/data-file boundary rather than browser
+  component state alone
 
 ### Clip explorer
 
@@ -275,6 +285,9 @@ access to the original evidence.
 - Demonstration fixtures are labeled and never presented as research results.
 - Corpus counts and meaning labels include only the review states selected by
   the researcher.
+- Participant region/dialect is unknown unless supported by researcher-supplied
+  evidence and confirmation; never assert it from appearance or an unsupported
+  accent impression.
 
 ## Delivery order
 

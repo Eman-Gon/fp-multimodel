@@ -35,10 +35,18 @@ truth as part of the change when it is in scope.
   transcripts, or processing state across videos.
 - Preserve stable particle `instance_id` values across Track A, B, and C.
 - Normalize traditional `嗎` to canonical `吗`, retaining `surface_form`.
+- Keep the validated seven-token detector separate from the extended
+  researcher-supplied candidate inventory. Candidate and stacked forms require
+  contextual human review before inclusion in corpus counts.
 - Treat every model value as a suggestion until a human explicitly reviews it.
 - Keep the original suggestion and provenance after acceptance or editing.
 - Never include draft clips in confirmed-corpus insights.
 - Derive `FP_count` from particle instances.
+- Treat discourse, utterance, sentence, and clause as distinct hierarchical
+  context levels; do not flatten them into one transcript field.
+- Store researcher-supplied participant region/dialect metadata with its
+  evidence and confirmation state. Never infer regional origin and present it
+  as fact.
 
 ## Development Commands
 
@@ -65,6 +73,10 @@ handoff. For cross-track contract changes, test both runtimes.
 - Keep provider integrations behind the existing narrow interfaces so tests
   do not require credentials or heavyweight CV dependencies.
 - Maintain optimistic version checks in Track C review mutations.
+- Persist production annotations through a repository or data-file boundary;
+  do not rely on browser component state as the saved record.
+- Render FP emphasis in the transcript UI; do not add formatting markers to
+  canonical transcript text.
 - Label fixture/demo data clearly and never present it as research findings.
 - Do not edit generated directories or caches (`.next/`, `node_modules/`,
   `.venv/`, `__pycache__/`, `.pytest_cache/`, `tsconfig.tsbuildinfo`).
