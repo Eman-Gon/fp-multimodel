@@ -226,8 +226,12 @@ export function TwelveLabsIntegration({
   };
 
   const handleStartIndexing = async () => {
+    const knownVideo = videoOptions.some(
+      ({ video_id: optionVideoId }) => optionVideoId === videoId.trim(),
+    );
     if (
       connectionState.status !== "configured" ||
+      !knownVideo ||
       videoId.trim().length === 0 ||
       indexId.trim().length === 0 ||
       videoUrl.trim().length === 0 ||
@@ -301,11 +305,21 @@ export function TwelveLabsIntegration({
     const requestId = ++analysisRequest.current;
     setAnalysisState({ status: "processing" });
     try {
-      const particle = {
-        ...selectedOption.particle,
-        fp_start_ms: validWindow.particle_interval.start_ms,
-        fp_end_ms: validWindow.particle_interval.end_ms,
-      };
+      if (
+        validWindow.particle_interval.start_ms !==
+          selectedOption.particle.fp_start_ms ||
+        validWindow.particle_interval.end_ms !==
+          selectedOption.particle.fp_end_ms ||
+        validWindow.analysis_window.start_ms !==
+          selectedOption.analysis_window.start_ms ||
+        validWindow.analysis_window.end_ms !==
+          selectedOption.analysis_window.end_ms
+      ) {
+        throw new TwelveLabsUiRequestError(
+          "Analysis must use the retained, source-bounded Track A particle window.",
+        );
+      }
+      const particle = selectedOption.particle;
       const expectedWindow = createGestureAnalysisWindow(
         particle,
         selectedOption.video_duration_ms,
@@ -398,8 +412,12 @@ export function TwelveLabsIntegrationView({
     windowDraft,
     selectedOption?.video_duration_ms,
   );
+  const knownVideo = videoOptions.some(
+    ({ video_id: optionVideoId }) => optionVideoId === videoId.trim(),
+  );
   const canIndex =
     connectionState.status === "configured" &&
+    knownVideo &&
     videoId.trim().length > 0 &&
     indexId.trim().length > 0 &&
     videoUrl.trim().length > 0 &&
@@ -486,7 +504,8 @@ export function TwelveLabsIntegrationView({
                 spellCheck={false}
               />
               <small id="twelvelabs-video-id-help">
-                Choose a known source video or enter a stable video_id.
+                Choose a registered source video with retained Track A
+                particle suggestions.
               </small>
             </div>
             <datalist id="twelvelabs-video-options">
@@ -630,6 +649,7 @@ export function TwelveLabsIntegrationView({
                 onChange={(value) =>
                   onWindowValueChange("window_start_ms", value)
                 }
+                readOnly
               />
               <TimeInput
                 id="twelvelabs-window-end"
@@ -638,6 +658,7 @@ export function TwelveLabsIntegrationView({
                 onChange={(value) =>
                   onWindowValueChange("window_end_ms", value)
                 }
+                readOnly
               />
               <TimeInput
                 id="twelvelabs-particle-start"
@@ -646,6 +667,7 @@ export function TwelveLabsIntegrationView({
                 onChange={(value) =>
                   onWindowValueChange("particle_start_ms", value)
                 }
+                readOnly
               />
               <TimeInput
                 id="twelvelabs-particle-end"
@@ -654,6 +676,7 @@ export function TwelveLabsIntegrationView({
                 onChange={(value) =>
                   onWindowValueChange("particle_end_ms", value)
                 }
+                readOnly
               />
             </div>
             <p
@@ -666,7 +689,7 @@ export function TwelveLabsIntegrationView({
               role={windowError === null ? undefined : "alert"}
             >
               {windowError ??
-                "The particle interval must remain inside the analysis window."}
+                "The retained Track A timing is read-only; Pegasus receives this exact source-video window."}
             </p>
 
             <button
@@ -954,11 +977,13 @@ function TimeInput({
   label,
   value,
   onChange,
+  readOnly = false,
 }: Readonly<{
   id: string;
   label: string;
   value: number | null;
   onChange: (value: number | null) => void;
+  readOnly?: boolean;
 }>) {
   return (
     <label className="twelvelabs-time-field" htmlFor={id}>
@@ -970,12 +995,16 @@ function TimeInput({
         step={1}
         inputMode="numeric"
         value={value ?? ""}
-        onChange={(event) =>
-          onChange(
-            event.currentTarget.value === ""
-              ? null
-              : event.currentTarget.valueAsNumber,
-          )
+        readOnly={readOnly}
+        onChange={
+          readOnly
+            ? undefined
+            : (event) =>
+                onChange(
+                  event.currentTarget.value === ""
+                    ? null
+                    : event.currentTarget.valueAsNumber,
+                )
         }
       />
     </label>

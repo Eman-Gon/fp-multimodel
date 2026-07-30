@@ -66,15 +66,29 @@ export type TwelveLabsIndexRequest =
 export type TwelveLabsIndexStage = "upload" | "index";
 export type TwelveLabsIndexStatus = "processing" | "ready" | "failed";
 
-export interface TwelveLabsIndexData {
+interface TwelveLabsIndexDataBase {
   readonly provider: "twelvelabs";
   readonly video_id: string;
   readonly index_id: string;
   readonly asset_id: string;
-  readonly indexed_asset_id: string | null;
-  readonly stage: TwelveLabsIndexStage;
   readonly status: TwelveLabsIndexStatus;
 }
+
+export interface TwelveLabsUploadIndexData
+  extends TwelveLabsIndexDataBase {
+  readonly indexed_asset_id: null;
+  readonly stage: "upload";
+}
+
+export interface TwelveLabsIndexedIndexData
+  extends TwelveLabsIndexDataBase {
+  readonly indexed_asset_id: string;
+  readonly stage: "index";
+}
+
+export type TwelveLabsIndexData =
+  | TwelveLabsUploadIndexData
+  | TwelveLabsIndexedIndexData;
 
 export type TwelveLabsIndexResponse =
   ApiDataResponse<TwelveLabsIndexData>;

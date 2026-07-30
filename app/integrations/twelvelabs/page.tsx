@@ -4,7 +4,7 @@ import {
 } from "@/components/integrations/twelvelabs-integration.tsx";
 import { createGestureAnalysisWindow } from "@/lib/track-b/analysis-window.ts";
 import { getClipById, listClips } from "@/lib/track-c/repository.ts";
-import type { FinalParticleInstance, TimeRange } from "@/lib/types.ts";
+import type { FinalParticleInstance } from "@/lib/types.ts";
 import { TARGET_PARTICLES } from "@/lib/vocab.ts";
 
 export const dynamic = "force-dynamic";
@@ -23,16 +23,21 @@ function getVideoOptions(): readonly TwelveLabsVideoOption[] {
     }
 
     for (const particle of clip.particle_instances) {
+      if (
+        particle.fields.fp_token.state === "skipped" ||
+        particle.fields.fp_timing.state === "skipped"
+      ) {
+        continue;
+      }
       const key = `${clip.video.id}:${particle.instance_id}`;
       if (options.has(key)) {
         continue;
       }
-      const particleInterval = currentParticleInterval(particle.fields.fp_timing);
-      const particleToken =
-        particle.fields.fp_token.state === "skipped"
-          ? particle.fields.fp_token.suggestion.value
-          : (particle.fields.fp_token.value ??
-            particle.fields.fp_token.suggestion.value);
+      // This endpoint accepts the immutable Track A handoff shape. Replaying
+      // the retained suggestions avoids falsely attributing a later human edit
+      // to the original MFA rule.
+      const particleInterval = particle.fields.fp_timing.suggestion.value;
+      const particleToken = particle.fields.fp_token.suggestion.value;
       const vocabularyEntry = TARGET_PARTICLES.find(
         ({ token }) => token === particleToken,
       );
@@ -73,16 +78,4 @@ function getVideoOptions(): readonly TwelveLabsVideoOption[] {
       left.video_id.localeCompare(right.video_id) ||
       left.instance_id.localeCompare(right.instance_id),
   );
-}
-
-function currentParticleInterval(
-  field: {
-    readonly state: "suggested" | "confirmed" | "skipped";
-    readonly value: TimeRange | null;
-    readonly suggestion: { readonly value: TimeRange };
-  },
-): TimeRange {
-  return field.state === "skipped"
-    ? field.suggestion.value
-    : (field.value ?? field.suggestion.value);
 }

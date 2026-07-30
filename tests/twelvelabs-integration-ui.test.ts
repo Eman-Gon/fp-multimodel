@@ -14,6 +14,7 @@ import {
 import {
   analyzeTwelveLabsGesture,
   getTwelveLabsConnectionStatus,
+  parseGestureSuggestionPayload,
   startTwelveLabsIndex,
   type TwelveLabsGestureSuggestion,
 } from "../components/integrations/twelvelabs-client.ts";
@@ -205,6 +206,86 @@ test("the result view keeps IDs, provenance, and human-review labeling visible",
   assert.match(markup, /TWELVELABS_API_KEY/);
   assert.doesNotMatch(markup, /type="password"/);
   assert.doesNotMatch(markup, /name="api_key"/);
+  assert.match(markup, /readonly=""/);
+  assert.match(markup, /retained Track A timing is read-only/i);
+});
+
+test("browser parsing rejects malformed nested model evidence", () => {
+  const annotation = suggestionFixture().annotation;
+  const fractionalMotionPayload = {
+    data: {
+      provider: "twelvelabs",
+      model: "pegasus1.5",
+      video_id: "vid03",
+      instance_id: "vid03:u17",
+      asset_id: "asset-123",
+      annotation: {
+        ...annotation,
+        model_evidence: {
+          ...annotation.model_evidence,
+          mediapipe_intervals: [
+            { start_ms: 13_800.5, end_ms: 14_800 },
+          ],
+        },
+      },
+    },
+  };
+  assert.throws(
+    () =>
+      parseGestureSuggestionPayload(
+        fractionalMotionPayload,
+        analyzeRequest,
+      ),
+    /invalid gesture annotation response/,
+  );
+
+  const missingPegasusSegmentPayload = {
+    data: {
+      ...fractionalMotionPayload.data,
+      annotation: {
+        ...annotation,
+        model_evidence: {
+          ...annotation.model_evidence,
+          pegasus: {
+            ...annotation.model_evidence.pegasus,
+            segment: null,
+          },
+        },
+      },
+    },
+  };
+  assert.throws(
+    () =>
+      parseGestureSuggestionPayload(
+        missingPegasusSegmentPayload,
+        analyzeRequest,
+      ),
+    /invalid Pegasus evidence response/,
+  );
+
+  const emptyRawProvenancePayload = {
+    data: {
+      ...fractionalMotionPayload.data,
+      annotation: {
+        ...annotation,
+        model_evidence: {
+          ...annotation.model_evidence,
+          provider: {
+            ...annotation.model_evidence.provider,
+            raw_response: {},
+          },
+        },
+      },
+    },
+  };
+  assert.throws(
+    () =>
+      parseGestureSuggestionPayload(
+        emptyRawProvenancePayload,
+        analyzeRequest,
+      ),
+    /invalid gesture provenance response/,
+  );
 });
 
 test("loading, empty, and failed states expose accessible status semantics", () => {

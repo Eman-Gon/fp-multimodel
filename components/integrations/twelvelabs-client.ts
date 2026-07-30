@@ -1,4 +1,5 @@
 import { createGestureAnalysisWindow } from "@/lib/track-b/analysis-window.ts";
+import { parsePegasusGesture } from "@/lib/track-b/pegasus.ts";
 import type {
   ApiErrorResponse,
   TwelveLabsAnalyzeRequest,
@@ -399,7 +400,13 @@ function validateAnnotation(
     (boundaries.value !== null && !isTimeRange(boundaries.value)) ||
     !isRecord(value.model_evidence) ||
     !isRecord(value.model_evidence.pegasus) ||
-    !Array.isArray(value.model_evidence.mediapipe_intervals)
+    !Array.isArray(value.model_evidence.mediapipe_intervals) ||
+    !value.model_evidence.mediapipe_intervals.every(
+      (interval) =>
+        isTimeRange(interval) &&
+        interval.start_ms >= expectedWindow.start_ms &&
+        interval.end_ms <= expectedWindow.end_ms,
+    )
   ) {
     throw invalidResponse("gesture annotation");
   }
@@ -423,9 +430,15 @@ function validateAnnotation(
     pegasus.gesture_type !== type.value ||
     pegasus.gesture_region !== region.value ||
     typeof pegasus.confidence !== "number" ||
+    !Number.isFinite(pegasus.confidence) ||
     pegasus.confidence < 0 ||
     pegasus.confidence > 1 ||
-    (pegasus.segment !== null && !isTimeRange(pegasus.segment))
+    (type.value === "none"
+      ? pegasus.segment !== null
+      : !isTimeRange(pegasus.segment)) ||
+    (isTimeRange(pegasus.segment) &&
+      (pegasus.segment.start_ms < expectedWindow.start_ms ||
+        pegasus.segment.end_ms > expectedWindow.end_ms))
   ) {
     throw invalidResponse("Pegasus evidence");
   }
@@ -434,7 +447,12 @@ function validateAnnotation(
   if (!isRecord(provider)) {
     throw invalidResponse("gesture provenance");
   }
-  validateProviderEvidence(provider, request, expectedWindow);
+  validateProviderEvidence(
+    provider,
+    request,
+    expectedWindow,
+    pegasus,
+  );
 
   return structuredClone(value) as unknown as GestureAnnotationDraft;
 }
@@ -443,6 +461,7 @@ function validateProviderEvidence(
   provider: Record<string, unknown>,
   request: TwelveLabsAnalyzeRequest,
   analysisWindow: TimeRange,
+  pegasusEvidence: Record<string, unknown>,
 ): void {
   if (
     provider.provider !== "twelvelabs" ||
@@ -451,6 +470,7 @@ function validateProviderEvidence(
     !isTimeRange(provider.provider_window) ||
     provider.provider_window.start_ms > analysisWindow.start_ms ||
     provider.provider_window.end_ms < analysisWindow.end_ms ||
+    provider.provider_window.end_ms > request.video_duration_ms ||
     (provider.response_id !== null &&
       typeof provider.response_id !== "string") ||
     (provider.finish_reason !== null &&
@@ -461,10 +481,37 @@ function validateProviderEvidence(
   }
   const rawKeys = Object.keys(provider.raw_response);
   if (
+    rawKeys.length !== 3 ||
+    !rawKeys.includes("id") ||
+    !rawKeys.includes("data") ||
+    !rawKeys.includes("finish_reason") ||
     rawKeys.some(
       (key) => !["id", "data", "finish_reason"].includes(key),
-    )
+    ) ||
+    provider.raw_response.id !== provider.response_id ||
+    provider.raw_response.finish_reason !== provider.finish_reason ||
+    typeof provider.raw_response.data !== "string"
   ) {
+    throw invalidResponse("gesture provenance");
+  }
+
+  try {
+    const rawPegasus = parsePegasusGesture(
+      provider.raw_response.data,
+      analysisWindow,
+    );
+    if (
+      rawPegasus.gesture_type !== pegasusEvidence.gesture_type ||
+      rawPegasus.gesture_region !== pegasusEvidence.gesture_region ||
+      rawPegasus.confidence !== pegasusEvidence.confidence ||
+      !sameNullableRange(rawPegasus.segment, pegasusEvidence.segment)
+    ) {
+      throw invalidResponse("gesture provenance");
+    }
+  } catch (error) {
+    if (error instanceof TwelveLabsUiRequestError) {
+      throw error;
+    }
     throw invalidResponse("gesture provenance");
   }
 }
@@ -476,12 +523,25 @@ function draftField(value: unknown): Record<string, unknown> {
     (value.source !== "pegasus" && value.source !== "mediapipe") ||
     (value.confidence !== null &&
       (typeof value.confidence !== "number" ||
+        !Number.isFinite(value.confidence) ||
         value.confidence < 0 ||
         value.confidence > 1))
   ) {
     throw invalidResponse("unconfirmed gesture field");
   }
   return value;
+}
+
+function sameNullableRange(left: unknown, right: unknown): boolean {
+  if (left === null || right === null) {
+    return left === right;
+  }
+  return (
+    isTimeRange(left) &&
+    isTimeRange(right) &&
+    left.start_ms === right.start_ms &&
+    left.end_ms === right.end_ms
+  );
 }
 
 async function pollUntilSettled(
