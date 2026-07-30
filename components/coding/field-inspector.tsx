@@ -23,6 +23,7 @@ import { formatSourceRange } from "./time.ts";
 
 interface FieldInspectorProps {
   readonly clip: ClipDetail;
+  readonly particleInstanceId: string;
   readonly activeTarget: FieldTarget;
   readonly summary: ReviewSummary;
   readonly saveState: "saved" | "saving" | "error";
@@ -36,6 +37,7 @@ interface FieldInspectorProps {
 
 export function FieldInspector({
   clip,
+  particleInstanceId,
   activeTarget,
   summary,
   saveState,
@@ -46,7 +48,10 @@ export function FieldInspector({
   onReturnToQueue,
   hasNextClip,
 }: FieldInspectorProps) {
-  const particle = clip.particle_instances[0];
+  const particle =
+    clip.particle_instances.find(
+      ({ instance_id }) => instance_id === particleInstanceId,
+    ) ?? clip.particle_instances[0];
   if (particle === undefined) {
     return null;
   }

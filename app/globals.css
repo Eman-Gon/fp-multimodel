@@ -425,6 +425,30 @@ a {
   font-size: 11px;
 }
 
+.particle-instance-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.particle-instance-tabs button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.particle-instance-tabs button.is-selected {
+  border-color: var(--indigo);
+  background: var(--indigo-soft);
+  color: #37318e;
+}
+
 .timeline {
   flex: 0 0 auto;
 }

@@ -4,10 +4,17 @@ import { sourceMillisecondsToFrame } from "./time.ts";
 
 interface MeaningContextProps {
   readonly clip: ClipDetail;
+  readonly particleInstanceId: string;
 }
 
-export function MeaningContext({ clip }: MeaningContextProps) {
-  const particle = clip.particle_instances[0];
+export function MeaningContext({
+  clip,
+  particleInstanceId,
+}: MeaningContextProps) {
+  const particle =
+    clip.particle_instances.find(
+      ({ instance_id }) => instance_id === particleInstanceId,
+    ) ?? clip.particle_instances[0];
   if (particle === undefined) {
     return null;
   }
@@ -58,11 +65,15 @@ export function MeaningContext({ clip }: MeaningContextProps) {
             <InfoItem label="Speaker" value={speaker.label} />
             <InfoItem
               label="Speaker region"
-              value={formatRegion(
-                speaker.region,
-                speaker.region_source,
-                speaker.region_confirmed,
-              )}
+              value={
+                speaker.id === "skipped"
+                  ? "Skipped"
+                  : formatRegion(
+                      speaker.region,
+                      speaker.region_source,
+                      speaker.region_confirmed,
+                    )
+              }
             />
             <InfoItem
               label="Addressee"
@@ -70,11 +81,15 @@ export function MeaningContext({ clip }: MeaningContextProps) {
             />
             <InfoItem
               label="Addressee region"
-              value={formatRegion(
-                addressee.region,
-                addressee.region_source,
-                addressee.region_confirmed,
-              )}
+              value={
+                addressee.id === "skipped"
+                  ? "Skipped"
+                  : formatRegion(
+                      addressee.region,
+                      addressee.region_source,
+                      addressee.region_confirmed,
+                    )
+              }
             />
             <InfoItem
               label="Final particle"
@@ -127,7 +142,15 @@ export function MeaningContext({ clip }: MeaningContextProps) {
         <span className="meaning-equation__arrow" aria-hidden="true">
           →
         </span>
-        <EvidenceTerm label="Proposed meaning" value={meaning} result />
+        <EvidenceTerm
+          label={
+            clip.clip.status === "confirmed"
+              ? "Reviewed meaning"
+              : "Proposed meaning"
+          }
+          value={meaning}
+          result
+        />
       </div>
 
       <p className="meaning-context__explanation">

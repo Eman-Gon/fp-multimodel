@@ -135,6 +135,7 @@ export interface ClipListItem {
  */
 export interface ConfirmedExplorerClipListItem {
   readonly id: string;
+  readonly instance_id: string;
   readonly name: string;
   readonly video_id: string;
   readonly transcript: string;

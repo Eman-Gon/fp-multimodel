@@ -223,6 +223,16 @@ def detect_from_mfa_output(
             f"alignment belongs to video {manifest.video_id!r}, "
             f"not {transcript.video_id!r}"
         )
+    out_of_bounds = [
+        utterance.id
+        for utterance in transcript.utterances
+        if utterance.end_ms > manifest.duration_ms
+    ]
+    if out_of_bounds:
+        raise ValueError(
+            "confirmed transcript extends past the aligned source video: "
+            + ", ".join(out_of_bounds)
+        )
     if manifest.transcript_sha256 != transcript_sha256(transcript):
         raise ValueError(
             "alignment was produced from a different transcript revision; "

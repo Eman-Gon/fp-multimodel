@@ -202,7 +202,7 @@ export function ClipExplorer({
             </div>
           ) : (
             visibleClips.map((clip) => (
-              <article key={clip.id}>
+              <article key={clip.instance_id}>
                 <div className="explorer-list__particle" lang="zh-Hans">
                   {clip.particle}
                 </div>

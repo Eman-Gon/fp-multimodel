@@ -152,8 +152,11 @@ uv run pytest
 ### Run A1 and A3–A5
 
 ```bash
-# A1: normalized.mp4 (30 fps) + audio.wav (16 kHz mono)
-uv run fp-track-a normalize input.mp4 --output-dir work/vid03
+# A1: verified normalized.mp4 (30 fps), audio.wav (16 kHz mono), and a
+# video-scoped media-manifest.json.
+uv run fp-track-a normalize input.mp4 \
+  --video-id vid03 \
+  --output-dir work/vid03
 
 # A2 contract / A3: validate ASR JSON, then human-correct it and explicitly set
 # transcript_confirmed=true on every reviewed utterance.

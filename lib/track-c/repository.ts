@@ -45,10 +45,7 @@ export function listClips(): readonly ClipListItem[] {
 
 export function listConfirmedExplorerClips(): readonly ConfirmedExplorerClipListItem[] {
   return Array.from(getStore().values())
-    .map(toConfirmedExplorerListItem)
-    .filter(
-      (clip): clip is ConfirmedExplorerClipListItem => clip !== null,
-    )
+    .flatMap(toConfirmedExplorerListItems)
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -123,27 +120,19 @@ function toListItem(clip: ClipDetail): ClipListItem {
   };
 }
 
-function toConfirmedExplorerListItem(
+function toConfirmedExplorerListItems(
   clip: ClipDetail,
-): ConfirmedExplorerClipListItem | null {
+): readonly ConfirmedExplorerClipListItem[] {
   if (clip.clip.status !== "confirmed") {
-    return null;
+    return [];
   }
 
-  const particle = clip.particle_instances[0];
-  if (particle === undefined) {
-    return null;
-  }
-
-  const particleToken = particle.fields.fp_token.value;
   const communicativeFunction = clip.fields.communicative_function.value;
   if (
-    particle.fields.fp_token.state !== "confirmed" ||
-    particleToken === null ||
     clip.fields.communicative_function.state !== "confirmed" ||
     communicativeFunction === null
   ) {
-    return null;
+    return [];
   }
 
   const sentenceType =
@@ -160,16 +149,28 @@ function toConfirmedExplorerListItem(
       : (clip.participant_options.find(({ id }) => id === speakerId)?.label ??
         speakerId);
 
-  return {
-    id: clip.clip.id,
-    name: clip.clip.name,
-    video_id: clip.video.id,
-    transcript: clip.utterance.text,
-    particle: particleToken,
-    particle_pinyin: particle.fp_pinyin,
-    communicative_function: communicativeFunction,
-    sentence_type: sentenceType,
-    speaker_label: speakerLabel,
-    status: "confirmed",
-  };
+  return clip.particle_instances.flatMap((particle) => {
+    const particleToken = particle.fields.fp_token.value;
+    if (
+      particle.fields.fp_token.state !== "confirmed" ||
+      particleToken === null
+    ) {
+      return [];
+    }
+    return [
+      {
+        id: clip.clip.id,
+        instance_id: particle.instance_id,
+        name: clip.clip.name,
+        video_id: clip.video.id,
+        transcript: clip.utterance.text,
+        particle: particleToken,
+        particle_pinyin: particle.fp_pinyin,
+        communicative_function: communicativeFunction,
+        sentence_type: sentenceType,
+        speaker_label: speakerLabel,
+        status: "confirmed",
+      } satisfies ConfirmedExplorerClipListItem,
+    ];
+  });
 }

@@ -32,8 +32,11 @@ def test_aligns_with_required_models(tmp_path: Path) -> None:
         TrackAManifest(
             stage="corpus",
             video_id="vid1",
+            duration_ms=20_000,
+            fps=30,
             transcript_sha256="a" * 64,
             source_audio_sha256="b" * 64,
+            normalized_video_sha256="c" * 64,
         ),
     )
     commands: list[list[str]] = []
@@ -49,5 +52,8 @@ def test_aligns_with_required_models(tmp_path: Path) -> None:
     assert commands[0][-1] == "--clean"
     manifest = load_manifest(tmp_path / "aligned", expected_stage="alignment")
     assert manifest.transcript_sha256 == "a" * 64
+    assert manifest.duration_ms == 20_000
+    assert manifest.fps == 30
+    assert manifest.normalized_video_sha256 == "c" * 64
     assert manifest.dictionary_model == DICTIONARY_MODEL
     assert manifest.acoustic_model == ACOUSTIC_MODEL

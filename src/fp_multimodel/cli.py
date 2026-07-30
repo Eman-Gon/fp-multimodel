@@ -41,9 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="normalize a video to 30 fps and extract 16 kHz mono audio",
     )
     normalize.add_argument("input_video", type=Path)
+    normalize.add_argument("--video-id", required=True)
     normalize.add_argument("--output-dir", type=Path, required=True)
     normalize.add_argument("--force", action="store_true")
     normalize.add_argument("--ffmpeg-bin", default="ffmpeg")
+    normalize.add_argument("--ffprobe-bin", default="ffprobe")
 
     corpus = subparsers.add_parser(
         "prepare-corpus",
@@ -110,11 +112,14 @@ def _dispatch(args: argparse.Namespace) -> None:
         outputs = normalize_media(
             args.input_video,
             args.output_dir,
+            video_id=args.video_id,
             overwrite=args.force,
             ffmpeg_bin=args.ffmpeg_bin,
+            ffprobe_bin=args.ffprobe_bin,
         )
         print(f"normalized video: {outputs.video}")
         print(f"16 kHz mono audio: {outputs.audio}")
+        print(f"verified media manifest: {outputs.manifest_path}")
         return
 
     if args.command == "prepare-corpus":

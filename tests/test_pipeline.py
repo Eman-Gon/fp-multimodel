@@ -95,8 +95,11 @@ def write_alignment_manifest(path: Path, reviewed: Transcript) -> None:
         TrackAManifest(
             stage="alignment",
             video_id=reviewed.video_id,
+            duration_ms=20_000,
+            fps=30,
             transcript_sha256=transcript_sha256(reviewed),
             source_audio_sha256="b" * 64,
+            normalized_video_sha256="c" * 64,
             dictionary_model="mandarin_china_mfa",
             acoustic_model="mandarin_mfa",
         ),

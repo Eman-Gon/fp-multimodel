@@ -37,8 +37,11 @@ class TrackAManifest(StrictModel):
     schema_version: Literal[1] = 1
     stage: Literal["corpus", "alignment"]
     video_id: str = Field(min_length=1)
+    duration_ms: Annotated[int, Field(gt=0)]
+    fps: Literal[30]
     transcript_sha256: str = Field(pattern=SHA256_PATTERN)
     source_audio_sha256: str = Field(pattern=SHA256_PATTERN)
+    normalized_video_sha256: str = Field(pattern=SHA256_PATTERN)
     dictionary_model: str | None = None
     acoustic_model: str | None = None
 

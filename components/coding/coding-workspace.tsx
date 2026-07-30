@@ -52,13 +52,21 @@ export function CodingWorkspace({
     )?.target ?? { scope: "clip", field: "speaker_id" };
   const [activeTarget, setActiveTarget] =
     useState<FieldTarget>(firstUnresolved);
+  const [activeParticleInstanceId, setActiveParticleInstanceId] = useState(
+    firstUnresolved.scope === "particle"
+      ? firstUnresolved.instance_id
+      : (initialClip.particle_instances[0]?.instance_id ?? ""),
+  );
   const player = useClipPlayer({
     clipStartMs: clip.clip.start_ms,
     clipEndMs: clip.clip.end_ms,
     fps: clip.video.fps,
   });
   const summary = useMemo(() => summarizeReview(clip), [clip]);
-  const particle = clip.particle_instances[0];
+  const particle =
+    clip.particle_instances.find(
+      ({ instance_id }) => instance_id === activeParticleInstanceId,
+    ) ?? clip.particle_instances[0];
 
   const persistCommand = useCallback(
     (command: ClipCommand) => {
@@ -140,8 +148,15 @@ export function CodingWorkspace({
     [runCommand],
   );
 
-  const focusTarget = useCallback((target: FieldTarget) => {
+  const activateTarget = useCallback((target: FieldTarget) => {
     setActiveTarget(target);
+    if (target.scope === "particle") {
+      setActiveParticleInstanceId(target.instance_id);
+    }
+  }, []);
+
+  const focusTarget = useCallback((target: FieldTarget) => {
+    activateTarget(target);
     requestAnimationFrame(() => {
       const key = targetKey(target);
       const row = document.querySelector<HTMLElement>(
@@ -154,7 +169,7 @@ export function CodingWorkspace({
         )
         ?.focus({ preventScroll: true });
     });
-  }, []);
+  }, [activateTarget]);
 
   const focusNextUnresolved = useCallback(
     (nextClip: ClipDetail, afterTarget = activeTarget) => {
@@ -386,6 +401,34 @@ export function CodingWorkspace({
             clipEndMs={clip.clip.end_ms}
             controller={player}
           />
+          {clip.particle_instances.length > 1 ? (
+            <nav
+              className="particle-instance-tabs"
+              aria-label="Particle instances in this clip"
+            >
+              {clip.particle_instances.map((instance, index) => {
+                const selected =
+                  instance.instance_id === particle.instance_id;
+                return (
+                  <button
+                    type="button"
+                    className={selected ? "is-selected" : undefined}
+                    aria-pressed={selected}
+                    onClick={() =>
+                      focusTarget({
+                        scope: "particle",
+                        instance_id: instance.instance_id,
+                        field: "fp_token",
+                      })
+                    }
+                    key={instance.instance_id}
+                  >
+                    Particle {index + 1} · {currentParticleToken(instance)}
+                  </button>
+                );
+              })}
+            </nav>
+          ) : null}
           <TimelineEditor
             clipStartMs={clip.clip.start_ms}
             clipEndMs={clip.clip.end_ms}
@@ -396,7 +439,7 @@ export function CodingWorkspace({
             disabled={clip.clip.status === "confirmed"}
             onSeek={player.seekSourceMs}
             onActivate={(field) =>
-              setActiveTarget({
+              activateTarget({
                 scope: "particle",
                 instance_id: particle.instance_id,
                 field,
@@ -417,15 +460,19 @@ export function CodingWorkspace({
             text={clip.utterance.text}
             particle={currentParticleToken(particle)}
           />
-          <MeaningContext clip={clip} />
+          <MeaningContext
+            clip={clip}
+            particleInstanceId={particle.instance_id}
+          />
         </div>
         <FieldInspector
           clip={clip}
+          particleInstanceId={particle.instance_id}
           activeTarget={activeTarget}
           summary={summary}
           saveState={saveState}
           liveMessage={liveMessage}
-          onActivate={setActiveTarget}
+          onActivate={activateTarget}
           onReview={(target, review) => {
             reviewField(target, review);
           }}

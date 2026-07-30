@@ -207,6 +207,33 @@ test("marking a gesture absent resolves dependent fields without losing suggesti
     hasReviewError("GESTURE_STATE_CONFLICT"),
   );
 
+  const presentAgain = applyClipCommand(absent, {
+    expected_version: absent.version,
+    command: "review_field",
+    target: {
+      scope: "particle",
+      instance_id: particle.instance_id,
+      field: "gesture_present",
+    },
+    review: { action: "edit", value: true },
+  });
+  const restoredFields = presentAgain.particle_instances[0]!.fields;
+  assert.equal(restoredFields.gesture_type.state, "suggested");
+  assert.equal(
+    restoredFields.gesture_type.value,
+    restoredFields.gesture_type.suggestion.value,
+  );
+  assert.equal(restoredFields.gesture_region.state, "suggested");
+  assert.equal(
+    restoredFields.gesture_region.value,
+    restoredFields.gesture_region.suggestion.value,
+  );
+  assert.equal(restoredFields.gesture_timing.state, "suggested");
+  assert.deepEqual(
+    restoredFields.gesture_timing.value,
+    restoredFields.gesture_timing.suggestion.value,
+  );
+
   let reviewed = absent;
   while (true) {
     const unresolved = listReviewUnits(reviewed).find(
@@ -227,6 +254,70 @@ test("marking a gesture absent resolves dependent fields without losing suggesti
     command: "confirm_clip",
   });
   assert.equal(confirmed.clip.status, "confirmed");
+});
+
+test("restoring gesture presence does not undo a manual skip", () => {
+  const clip = createDemoClip();
+  const instanceId = clip.particle_instances[0]!.instance_id;
+  const manuallySkippedType = applyClipCommand(clip, {
+    expected_version: clip.version,
+    command: "review_field",
+    target: {
+      scope: "particle",
+      instance_id: instanceId,
+      field: "gesture_type",
+    },
+    review: {
+      action: "skip",
+      reason: "The gesture type is genuinely uncertain.",
+    },
+  });
+  const manuallySkippedRegion = applyClipCommand(manuallySkippedType, {
+    expected_version: manuallySkippedType.version,
+    command: "review_field",
+    target: {
+      scope: "particle",
+      instance_id: instanceId,
+      field: "gesture_region",
+    },
+    review: {
+      action: "skip",
+      reason: "The gesture region is genuinely uncertain.",
+    },
+  });
+  const absent = applyClipCommand(manuallySkippedRegion, {
+    expected_version: manuallySkippedRegion.version,
+    command: "review_field",
+    target: {
+      scope: "particle",
+      instance_id: instanceId,
+      field: "gesture_present",
+    },
+    review: { action: "edit", value: false },
+  });
+  const presentAgain = applyClipCommand(absent, {
+    expected_version: absent.version,
+    command: "review_field",
+    target: {
+      scope: "particle",
+      instance_id: instanceId,
+      field: "gesture_present",
+    },
+    review: { action: "edit", value: true },
+  });
+
+  const fields = presentAgain.particle_instances[0]!.fields;
+  assert.equal(fields.gesture_type.state, "skipped");
+  assert.equal(
+    fields.gesture_type.review?.reason,
+    "The gesture type is genuinely uncertain.",
+  );
+  assert.equal(fields.gesture_region.state, "skipped");
+  assert.equal(
+    fields.gesture_region.review?.reason,
+    "The gesture region is genuinely uncertain.",
+  );
+  assert.equal(fields.gesture_timing.state, "suggested");
 });
 
 test("a present gesture cannot resolve to gesture type none", () => {

@@ -63,8 +63,11 @@ def align_corpus(
         TrackAManifest(
             stage="alignment",
             video_id=corpus_manifest.video_id,
+            duration_ms=corpus_manifest.duration_ms,
+            fps=corpus_manifest.fps,
             transcript_sha256=corpus_manifest.transcript_sha256,
             source_audio_sha256=corpus_manifest.source_audio_sha256,
+            normalized_video_sha256=corpus_manifest.normalized_video_sha256,
             dictionary_model=DICTIONARY_MODEL,
             acoustic_model=ACOUSTIC_MODEL,
         ),

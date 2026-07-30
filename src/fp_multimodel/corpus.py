@@ -11,6 +11,7 @@ from pathlib import Path
 from fp_multimodel.manifest import (
     TrackAManifest,
     file_sha256,
+    load_media_manifest,
     transcript_sha256,
     write_manifest,
 )
@@ -107,6 +108,29 @@ def prepare_mfa_corpus(
     for utterance in transcript.utterances:
         _validate_reviewed_utterance(utterance)
 
+    media_manifest = load_media_manifest(source_audio.parent)
+    if media_manifest.video_id != transcript.video_id:
+        raise ValueError(
+            f"transcript video_id {transcript.video_id!r} does not match "
+            f"media video_id {media_manifest.video_id!r}"
+        )
+    source_audio_sha256 = file_sha256(source_audio)
+    if source_audio_sha256 != media_manifest.audio_sha256:
+        raise ValueError(
+            "source audio does not match its media manifest; normalize or "
+            "select the correct video before preparing the corpus"
+        )
+    out_of_bounds = [
+        utterance.id
+        for utterance in transcript.utterances
+        if utterance.end_ms > media_manifest.duration_ms
+    ]
+    if out_of_bounds:
+        raise ValueError(
+            "utterances extend past the source video duration: "
+            + ", ".join(out_of_bounds)
+        )
+
     entries = [
         CorpusEntry(
             utterance_id=utterance.id,
@@ -145,8 +169,11 @@ def prepare_mfa_corpus(
         TrackAManifest(
             stage="corpus",
             video_id=transcript.video_id,
+            duration_ms=media_manifest.duration_ms,
+            fps=media_manifest.fps,
             transcript_sha256=transcript_sha256(transcript),
-            source_audio_sha256=file_sha256(source_audio),
+            source_audio_sha256=source_audio_sha256,
+            normalized_video_sha256=media_manifest.normalized_video_sha256,
         ),
     )
     return entries
