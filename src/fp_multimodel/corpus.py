@@ -8,6 +8,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from fp_multimodel.manifest import (
+    TrackAManifest,
+    file_sha256,
+    transcript_sha256,
+    write_manifest,
+)
 from fp_multimodel.models import Transcript, Utterance
 
 
@@ -134,5 +140,13 @@ def prepare_mfa_corpus(
         )
         entry.lab.write_text(utterance.text.strip() + "\n", encoding="utf-8")
 
+    write_manifest(
+        output_dir,
+        TrackAManifest(
+            stage="corpus",
+            video_id=transcript.video_id,
+            transcript_sha256=transcript_sha256(transcript),
+            source_audio_sha256=file_sha256(source_audio),
+        ),
+    )
     return entries
-

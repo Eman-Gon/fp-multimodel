@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from fp_multimodel.manifest import TrackAManifest, load_manifest, write_manifest
 from fp_multimodel.mfa import (
     ACOUSTIC_MODEL,
     DICTIONARY_MODEL,
@@ -26,6 +27,15 @@ def test_downloads_required_mandarin_models() -> None:
 def test_aligns_with_required_models(tmp_path: Path) -> None:
     corpus = tmp_path / "corpus"
     corpus.mkdir()
+    write_manifest(
+        corpus,
+        TrackAManifest(
+            stage="corpus",
+            video_id="vid1",
+            transcript_sha256="a" * 64,
+            source_audio_sha256="b" * 64,
+        ),
+    )
     commands: list[list[str]] = []
 
     def record(command: list[str], *, check: bool) -> None:
@@ -37,3 +47,7 @@ def test_aligns_with_required_models(tmp_path: Path) -> None:
     assert commands[0][0:2] == ["mfa", "align"]
     assert commands[0][3:5] == [DICTIONARY_MODEL, ACOUSTIC_MODEL]
     assert commands[0][-1] == "--clean"
+    manifest = load_manifest(tmp_path / "aligned", expected_stage="alignment")
+    assert manifest.transcript_sha256 == "a" * 64
+    assert manifest.dictionary_model == DICTIONARY_MODEL
+    assert manifest.acoustic_model == ACOUSTIC_MODEL

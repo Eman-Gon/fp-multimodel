@@ -88,11 +88,14 @@ The first runnable vertical slice lives in the Python package under
 - explicit `source`, nullable confidence, and `confirmed: false` provenance on
   every rule-derived particle
 - conversion of segment-local MFA timings back to source-video milliseconds
+- revision manifests that reject stale or cross-video TextGrids after a
+  transcript correction
 
-ASR provider integration (A2), sentence-type classification (A6), and nested
-discourse structure (A7) are the next Track A increments. Until the ASR adapter
-is connected, `examples/transcript.draft.json` demonstrates its required
-output contract.
+The provider-neutral A2 boundary is present, but a concrete Whisper or
+TwelveLabs adapter is still pending. Sentence-type classification (A6) and
+nested discourse structure (A7) are also next increments. Until an ASR adapter
+is connected, `examples/transcript.draft.json` demonstrates its required output
+contract.
 
 ### Setup
 
@@ -105,13 +108,13 @@ uv run fp-track-a --help
 uv run pytest
 ```
 
-### Run A1–A5
+### Run A1 and A3–A5
 
 ```bash
 # A1: normalized.mp4 (30 fps) + audio.wav (16 kHz mono)
 uv run fp-track-a normalize input.mp4 --output-dir work/vid03
 
-# A2/A3: validate the ASR JSON, then human-correct it and explicitly set
+# A2 contract / A3: validate ASR JSON, then human-correct it and explicitly set
 # transcript_confirmed=true on every reviewed utterance.
 uv run fp-track-a validate-transcript examples/transcript.draft.json
 

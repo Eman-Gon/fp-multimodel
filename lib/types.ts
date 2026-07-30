@@ -28,6 +28,9 @@ export interface FinalParticleInstance extends FinalParticleTiming {
   readonly fp_pinyin: ParticlePinyin;
   readonly surface_form: string;
   readonly utterance_id: string;
+  readonly source: "mfa_rule";
+  readonly confidence: number | null;
+  readonly confirmed: false;
 }
 
 export type TrackAParticle = FinalParticleInstance;

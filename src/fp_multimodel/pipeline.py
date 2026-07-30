@@ -6,6 +6,7 @@ import unicodedata
 from pathlib import Path
 
 from fp_multimodel.alignment import parse_textgrid
+from fp_multimodel.manifest import load_manifest, transcript_sha256
 from fp_multimodel.models import (
     AlignedInterval,
     ParticleDetectionResult,
@@ -124,6 +125,17 @@ def detect_from_mfa_output(
     if not alignment_dir.is_dir():
         raise FileNotFoundError(
             f"MFA alignment directory does not exist: {alignment_dir}"
+        )
+    manifest = load_manifest(alignment_dir, expected_stage="alignment")
+    if manifest.video_id != transcript.video_id:
+        raise ValueError(
+            f"alignment belongs to video {manifest.video_id!r}, "
+            f"not {transcript.video_id!r}"
+        )
+    if manifest.transcript_sha256 != transcript_sha256(transcript):
+        raise ValueError(
+            "alignment was produced from a different transcript revision; "
+            "prepare and align the reviewed corpus again"
         )
 
     alignments = []

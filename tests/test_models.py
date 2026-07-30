@@ -76,6 +76,20 @@ def test_confirmation_must_be_a_json_boolean(coercible_value: object) -> None:
         )
 
 
+def test_millisecond_fields_do_not_accept_numeric_strings() -> None:
+    with pytest.raises(ValidationError):
+        Utterance.model_validate(
+            {
+                "id": "u1",
+                "start_ms": "1000",
+                "end_ms": 2000,
+                "text": "你好吗",
+                "speaker": "spkA",
+                "confidence": 0.8,
+            }
+        )
+
+
 def test_particle_interval_must_have_positive_duration() -> None:
     with pytest.raises(ValidationError, match="fp_end_ms must be greater"):
         ParticleInstance(

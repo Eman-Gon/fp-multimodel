@@ -7,6 +7,12 @@ import type {
 } from "../lib/types.ts";
 import { draftTrackBAnnotations } from "../lib/track-b/pipeline.ts";
 
+const trackAProvenance = {
+  source: "mfa_rule" as const,
+  confidence: null,
+  confirmed: false as const,
+};
+
 test("drafts each particle in a multi-particle video under its own instance_id", async () => {
   const semanticCalls: SemanticGestureRequest[] = [];
   const motionCalls: MotionDetectionRequest[] = [];
@@ -17,6 +23,7 @@ test("drafts each particle in a multi-particle video under its own instance_id",
       video_duration_ms: 20_000,
       particle_instances: [
         {
+          ...trackAProvenance,
           instance_id: "fp-ne",
           fp_token: "呢",
           fp_pinyin: "ne",
@@ -26,6 +33,7 @@ test("drafts each particle in a multi-particle video under its own instance_id",
           utterance_id: "u1",
         },
         {
+          ...trackAProvenance,
           instance_id: "fp-ma",
           fp_token: "吗",
           fp_pinyin: "ma",
@@ -88,6 +96,7 @@ test("rejects duplicate instance IDs before ambiguous graph links are emitted", 
         video_duration_ms: 20_000,
         particle_instances: [
           {
+            ...trackAProvenance,
             instance_id: "fp-1",
             fp_token: "呢",
             fp_pinyin: "ne",
@@ -97,6 +106,7 @@ test("rejects duplicate instance IDs before ambiguous graph links are emitted", 
             utterance_id: "u1",
           },
           {
+            ...trackAProvenance,
             instance_id: "fp-1",
             fp_token: "吗",
             fp_pinyin: "ma",

@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from fp_multimodel.corpus import prepare_mfa_corpus
+from fp_multimodel.manifest import load_manifest, transcript_sha256
 from fp_multimodel.models import Transcript, Utterance
 
 
@@ -58,6 +59,9 @@ def test_prepare_corpus_writes_lab_and_precise_segment_command(
     assert commands[0][commands[0].index("-ss") + 1] == "12.400"
     assert commands[0][commands[0].index("-t") + 1] == "2.700"
     assert commands[0][commands[0].index("-ar") + 1] == "16000"
+    manifest = load_manifest(tmp_path / "corpus", expected_stage="corpus")
+    assert manifest.video_id == "vid1"
+    assert manifest.transcript_sha256 == transcript_sha256(make_transcript())
 
 
 def test_prepare_corpus_aligns_canonical_ma_not_traditional_surface(

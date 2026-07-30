@@ -7,6 +7,11 @@ import {
 } from "../lib/track-b/pegasus.ts";
 
 const window = { start_ms: 2_000, end_ms: 6_000 };
+const trackAProvenance = {
+  source: "mfa_rule" as const,
+  confidence: null,
+  confirmed: false as const,
+};
 
 test("the Pegasus prompt requires absolute milliseconds and a controlled taxonomy", () => {
   const prompt = buildPegasusGesturePrompt(window);
@@ -39,6 +44,7 @@ test("parses a schema-compliant detected gesture", () => {
 
 test("adds exact particle context when Track A metadata is available", () => {
   const prompt = buildPegasusGesturePrompt(window, {
+    ...trackAProvenance,
     instance_id: "vid1:u1",
     fp_token: "吗",
     fp_pinyin: "ma",

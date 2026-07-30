@@ -68,6 +68,24 @@ export function createTrackBHandoff(
         `particles[${index}].surface_form does not match fp_token`,
       );
     }
+    if (particle.source !== "mfa_rule") {
+      throw new TypeError(`particles[${index}].source must equal mfa_rule`);
+    }
+    if (particle.confirmed !== false) {
+      throw new TypeError(
+        `particles[${index}] must remain unconfirmed until human review`,
+      );
+    }
+    if (
+      particle.confidence !== null &&
+      (!Number.isFinite(particle.confidence) ||
+        particle.confidence < 0 ||
+        particle.confidence > 1)
+    ) {
+      throw new RangeError(
+        `particles[${index}].confidence must be null or between 0 and 1`,
+      );
+    }
 
     assertTimeRange(
       {

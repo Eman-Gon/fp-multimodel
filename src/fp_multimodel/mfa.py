@@ -6,6 +6,8 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
+from fp_multimodel.manifest import TrackAManifest, load_manifest, write_manifest
+
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[bytes]]
 ACOUSTIC_MODEL = "mandarin_mfa"
@@ -42,6 +44,7 @@ def align_corpus(
     corpus_dir = corpus_dir.resolve()
     if not corpus_dir.is_dir():
         raise FileNotFoundError(f"MFA corpus directory does not exist: {corpus_dir}")
+    corpus_manifest = load_manifest(corpus_dir, expected_stage="corpus")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     command = [
@@ -55,4 +58,14 @@ def align_corpus(
     if clean:
         command.append("--clean")
     runner(command, check=True)
-
+    write_manifest(
+        output_dir,
+        TrackAManifest(
+            stage="alignment",
+            video_id=corpus_manifest.video_id,
+            transcript_sha256=corpus_manifest.transcript_sha256,
+            source_audio_sha256=corpus_manifest.source_audio_sha256,
+            dictionary_model=DICTIONARY_MODEL,
+            acoustic_model=ACOUSTIC_MODEL,
+        ),
+    )
