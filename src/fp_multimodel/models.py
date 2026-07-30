@@ -182,6 +182,7 @@ class TranscriptReview(FrozenStrictModel):
     action: Literal["accept", "edit"]
     reviewer_id: str = Field(min_length=1, pattern=r".*\S.*")
     reviewed_at: AwareDatetime
+    suggestion_artifact_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     evidence: str | None = None
 
     @field_validator("reviewed_at", mode="before")
@@ -298,6 +299,14 @@ class Transcript(StrictModel):
                         raise ValueError(
                             "confirmed ASR utterances require an explicit "
                             "transcript_review"
+                        )
+                    if (
+                        utterance.transcript_review.suggestion_artifact_sha256
+                        != self.asr_suggestion_artifact_sha256
+                    ):
+                        raise ValueError(
+                            "transcript_review must reference the original "
+                            "ASR suggestion artifact"
                         )
                     if utterance.speaker == "spk_unknown":
                         raise ValueError(

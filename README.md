@@ -151,6 +151,9 @@ The first runnable vertical slice lives in the Python package under
 - human-reviewable discourse, sentence, and clause context on each utterance
 
 The Whisper adapter is implemented behind the provider-neutral A2 boundary.
+Each run writes an append-only, content-addressed sidecar containing the exact
+raw provider JSON and original segment suggestions; reviewed transcripts remain
+hash-bound to that sidecar.
 Sentence-type classification (A6) and nested discourse structure (A7) remain
 next increments. `examples/transcript.draft.json` demonstrates the persisted
 suggestion/working-copy contract.
@@ -177,16 +180,18 @@ uv run fp-track-a normalize input.mp4 \
   --video-id vid03 \
   --output-dir work/vid03
 
-# A2: run Mandarin Whisper. This produces a frozen original suggestion and an
-# editable, unconfirmed utterance working copy.
+# A2: run Mandarin Whisper. Keep --output beside audio.wav. This produces an
+# append-only asr-suggestions/<sha256>.json sidecar plus an editable,
+# unconfirmed utterance working copy.
 uv run fp-track-a transcribe \
   work/vid03/audio.wav \
   --video-id vid03 \
   --output work/vid03/transcript.draft.json
 
 # A3: copy the draft to transcript.reviewed.json; edit only utterances,
-# preserve asr_suggestion/source_segment_ids, and explicitly set
-# transcript_confirmed=true on every included utterance.
+# preserve the suggestion digest and source_segment_ids, add a SpeakerProfile,
+# then add transcript_review (accept/edit, reviewer, timestamp, artifact digest)
+# and transcript_confirmed=true to every included utterance.
 uv run fp-track-a validate-transcript work/vid03/transcript.reviewed.json
 
 # A3: this command refuses unconfirmed transcripts.
@@ -210,6 +215,8 @@ uv run fp-track-a detect-fps \
 
 All canonical times are integer milliseconds. Frame numbers remain derived UI
 values (`round(ms / 1000 * fps)`) and are never persisted by Track A.
+Corpus/alignment manifests are schema version 2; regenerate older Track A
+artifacts because the transcript hash now includes A2 and review provenance.
 
 ## Track B foundation
 
@@ -238,9 +245,32 @@ The provider-independent B1–B3 core lives in `lib/track-b`. It currently:
 - returns completed or failed status per video so failed provider calls can be
   retried without rerunning completed videos
 
-The concrete TwelveLabs client and batched Python MediaPipe worker are the next
-integration step. The core uses small provider interfaces so API credentials
-and heavyweight CV dependencies are not required by its test suite.
+The concrete TwelveLabs integration now uses the current v1.3 workflow:
+`/assets` for direct or URL uploads, `/indexes/{index-id}/indexed-assets` for
+separate indexing, and Pegasus 1.5 `/analyze` calls with the existing controlled
+gesture schema. Provider-native responses are retained beside the strict
+gesture value while every emitted field remains an unconfirmed suggestion.
+
+Configure the server-only credential locally:
+
+```bash
+cp .env.example .env.local
+# Set TWELVELABS_API_KEY in .env.local; never use a NEXT_PUBLIC_ variable.
+```
+
+The narrow server routes are:
+
+- `GET /api/integrations/twelvelabs/status` — configuration status only; never
+  returns the credential
+- `POST /api/integrations/twelvelabs/index` — `upload`, `index`, and `status`
+  actions for the asynchronous asset/index workflow
+- `POST /api/integrations/twelvelabs/analyze` — validates one Track A particle,
+  constructs the controlled prompt/schema server-side, and returns an
+  unconfirmed Track B gesture draft
+
+The batched Python MediaPipe worker remains a next integration step. Provider
+calls stay behind small interfaces, so tests require neither credentials nor
+heavyweight CV dependencies.
 
 ## Track C foundation
 

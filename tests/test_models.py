@@ -163,6 +163,7 @@ def test_confirmed_asr_transcript_requires_human_review_and_speaker_profile() ->
         action="accept",
         reviewer_id="researcher-1",
         reviewed_at=datetime(2026, 7, 30, 20, 0, tzinfo=timezone.utc),
+        suggestion_artifact_sha256="c" * 64,
     )
 
     with pytest.raises(ValidationError, match="explicit transcript_review"):

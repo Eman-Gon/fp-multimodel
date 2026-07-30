@@ -60,6 +60,7 @@ export function GraphCanvas({
   const [engineRunning, setEngineRunning] = useState(true);
   const [reduceMotion, setReduceMotion] = useState(false);
   const hasFit = useRef(false);
+  const forcesConfigured = useRef(false);
   const canvasData = useMemo<{
     readonly nodes: CanvasNode[];
     readonly links: CanvasLink[];
@@ -99,7 +100,8 @@ export function GraphCanvas({
 
   useEffect(() => {
     hasFit.current = false;
-    setEngineRunning(true);
+    forcesConfigured.current = false;
+    setEngineRunning(dataset.nodes.length > 0);
     setPaused(false);
   }, [dataset]);
 
@@ -259,6 +261,14 @@ export function GraphCanvas({
           }}
           onBackgroundClick={() => onSelectNode(null)}
           onEngineTick={() => {
+            if (!forcesConfigured.current) {
+              const charge = graphRef.current?.d3Force("charge");
+              const link = graphRef.current?.d3Force("link");
+              charge?.strength?.(-125);
+              link?.distance?.(66);
+              forcesConfigured.current = true;
+              graphRef.current?.d3ReheatSimulation();
+            }
             if (!engineRunning && !paused) {
               setEngineRunning(true);
             }
@@ -291,17 +301,28 @@ export function GraphCanvas({
       )}
 
       <div className="graph-canvas__controls" aria-label="Graph canvas controls">
-        <button type="button" onClick={() => zoomBy(1.25)} aria-label="Zoom in">
+        <button
+          type="button"
+          onClick={() => zoomBy(1.25)}
+          aria-label="Zoom in"
+          disabled={dataset.nodes.length === 0}
+        >
           <Plus aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={() => zoomBy(0.8)}
           aria-label="Zoom out"
+          disabled={dataset.nodes.length === 0}
         >
           <Minus aria-hidden="true" />
         </button>
-        <button type="button" onClick={fitGraph} aria-label="Fit graph to view">
+        <button
+          type="button"
+          onClick={fitGraph}
+          aria-label="Fit graph to view"
+          disabled={dataset.nodes.length === 0}
+        >
           <Maximize2 aria-hidden="true" />
         </button>
         <button
@@ -309,6 +330,7 @@ export function GraphCanvas({
           onClick={togglePaused}
           aria-label={paused ? "Resume graph motion" : "Pause graph motion"}
           aria-pressed={paused}
+          disabled={dataset.nodes.length === 0}
         >
           {paused ? (
             <Play aria-hidden="true" />
@@ -321,11 +343,13 @@ export function GraphCanvas({
             className={engineRunning && !paused ? "is-running" : undefined}
             aria-hidden="true"
           />
-          {paused
-            ? "Layout paused"
-            : engineRunning
-              ? "Auto-layout running"
-              : "Layout settled"}
+          {dataset.nodes.length === 0
+            ? "No layout"
+            : paused
+              ? "Layout paused"
+              : engineRunning
+                ? "Auto-layout running"
+                : "Layout settled"}
         </span>
       </div>
 

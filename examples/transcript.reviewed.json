@@ -57,6 +57,7 @@
         "action": "edit",
         "reviewer_id": "researcher-example",
         "reviewed_at": "2026-07-30T20:00:00Z",
+        "suggestion_artifact_sha256": "93203bf3b0e700bf7dae2e23a2a7e5d74a813579cb13290f0c3032f9eca881db",
         "evidence": "Corrected character form and assigned the reviewed speaker."
       },
       "linguistic_context": null

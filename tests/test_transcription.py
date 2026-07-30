@@ -162,6 +162,9 @@ def test_reviewed_working_copy_can_change_without_losing_asr_suggestion(
                 "action": "edit",
                 "reviewer_id": "researcher-1",
                 "reviewed_at": "2026-07-30T20:00:00Z",
+                "suggestion_artifact_sha256": (
+                    draft.asr_suggestion_artifact_sha256
+                ),
                 "evidence": "Corrected characters, timing, and speaker.",
             },
         }

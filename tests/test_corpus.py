@@ -240,6 +240,9 @@ def test_prepare_corpus_rejects_asr_suggestion_from_different_audio(
                             0,
                             tzinfo=timezone.utc,
                         ),
+                        suggestion_artifact_sha256=(
+                            asr_suggestion_artifact_sha256(artifact)
+                        ),
                     ),
                 }
             )

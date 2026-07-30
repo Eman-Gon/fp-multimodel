@@ -184,17 +184,23 @@ The runnable adapter invokes the external `openai-whisper` CLI with
 the verified A1 audio hash and source-video duration. Whisper's
 `avg_logprob` is retained as a provider-native diagnostic; the review-priority
 confidence is `exp(avg_logprob)` and that derivation is named in provenance.
+Provider text is retained byte-for-byte at the segment boundary; whitespace is
+trimmed only when creating the editable working copy.
 
-The original segment-level ASR suggestion is an immutable `asr_suggestion`,
-separate from the editable `utterances` working copy. `source_segment_ids`
-keeps lineage when a reviewer splits or merges rough ASR segments. A reviewed
-transcript must never overwrite or delete its original suggestion.
+The original segment-level ASR suggestion and exact raw provider JSON are
+written once to `asr-suggestions/<sha256>.json`. The transcript embeds the
+typed suggestion for review and records that content-addressed sidecar digest.
+Loading a transcript and preparing an MFA corpus compare both copies and refuse
+changed, missing, or discarded provenance. `source_segment_ids` keeps lineage
+when a reviewer splits or merges rough ASR segments. Re-running A2 creates a
+new sidecar instead of overwriting an earlier run.
 
 Abbreviated output shape:
 ```json
 {
   "video_id": "vid03",
   "transcript_origin": "asr",
+  "asr_suggestion_artifact_sha256": "...",
   "asr_suggestion": {
     "schema_version": 1,
     "provenance": {
@@ -229,7 +235,8 @@ Abbreviated output shape:
       "speaker": "spk_unknown",
       "confidence": 0.82,
       "source_segment_ids": ["u000001"],
-      "transcript_confirmed": false
+      "transcript_confirmed": false,
+      "transcript_review": null
     }
   ]
 }
@@ -238,9 +245,13 @@ Abbreviated output shape:
 ### A3. Human checkpoint — transcript correction
 Serve utterances to the Transcript Review page (Track C). Reviewer corrects characters, fixes segmentation, marks speaker. On submit, write corrected transcript to `.lab` files (one per utterance) alongside the WAV segments — MFA's expected input layout:
 
-Review edits apply only to the working `utterances`. The frozen
-`asr_suggestion` and its provider/audio provenance remain unchanged, and every
-reviewed utterance retains one or more `source_segment_ids`.
+Review edits apply only to the working `utterances`. The content-addressed
+`asr_suggestion` sidecar and its provider/audio provenance remain unchanged,
+and every reviewed utterance retains one or more `source_segment_ids`.
+Confirmation requires a `transcript_review` record with accept/edit action,
+reviewer identity, timezone-aware timestamp, and the exact suggestion-artifact
+digest reviewed. Confirmed ASR utterances must replace `spk_unknown` with a
+speaker backed by a video-scoped `SpeakerProfile`.
 ```
 corpus/
   spkA/
@@ -255,6 +266,10 @@ mfa model download dictionary mandarin_china_mfa
 mfa align corpus/ mandarin_china_mfa mandarin_mfa output/
 ```
 Produces TextGrid files with word- and phone-level start/end times.
+
+Track A corpus/alignment manifests use schema version 2 because their
+transcript hash now binds the A2 sidecar and human review record. Version 1
+corpora and alignments must be regenerated rather than silently reused.
 
 Parse TextGrids with `praatio` (Python). Extract word tier intervals.
 

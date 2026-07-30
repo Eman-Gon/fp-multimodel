@@ -200,10 +200,6 @@ function assertCanonicalTrackBDraft(
       "Track B draft model_evidence must contain Pegasus output and MediaPipe intervals",
     );
   }
-  if (draft.model_evidence.provider !== undefined) {
-    assertProviderEvidence(draft.model_evidence.provider);
-  }
-
   const canonical = reconcileGestureDraft(
     draft.video_id,
     draft.instance_id,
@@ -215,6 +211,15 @@ function assertCanonicalTrackBDraft(
   if (canonical.analysis_window.end_ms > clip.video.duration_ms) {
     throw new RangeError(
       "Track B analysis_window must not exceed the source video duration",
+    );
+  }
+  const providerWindow = canonical.model_evidence.provider?.provider_window;
+  if (
+    providerWindow !== undefined &&
+    providerWindow.end_ms > clip.video.duration_ms
+  ) {
+    throw new RangeError(
+      "Track B provider_window must not exceed the source video duration",
     );
   }
   const boundaries = canonical.gesture_boundaries.value;
@@ -263,39 +268,4 @@ function sameJsonValue(left: unknown, right: unknown): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function assertProviderEvidence(value: unknown): void {
-  if (!isRecord(value)) {
-    throw new TypeError("Track B provider evidence must be an object");
-  }
-  const keys = Object.keys(value).sort();
-  const expectedKeys = [
-    "asset_id",
-    "finish_reason",
-    "model",
-    "provider",
-    "provider_window",
-    "raw_response",
-    "response_id",
-  ];
-  if (!sameJsonValue(keys, expectedKeys)) {
-    throw new TypeError("Track B provider evidence has unexpected fields");
-  }
-  if (value.provider !== "twelvelabs" || value.model !== "pegasus1.5") {
-    throw new TypeError("Track B provider evidence identifies an unsupported model");
-  }
-  if (
-    value.response_id !== null &&
-    (typeof value.response_id !== "string" ||
-      value.response_id.trim().length === 0)
-  ) {
-    throw new TypeError("Track B provider response_id must be null or non-empty");
-  }
-  if (
-    value.finish_reason !== null &&
-    typeof value.finish_reason !== "string"
-  ) {
-    throw new TypeError("Track B provider finish_reason must be null or a string");
-  }
 }

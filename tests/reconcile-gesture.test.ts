@@ -173,3 +173,60 @@ test("does not use MediaPipe boundaries outside the Pegasus segment", () => {
     null,
   );
 });
+
+test("provider evidence must cover the analysis window without aliasing it", () => {
+  const providerWindow = { start_ms: 1_000, end_ms: 7_000 };
+  const draft = reconcileGestureDraft(
+    "vid1",
+    "vid1:u1",
+    analysisWindow,
+    {
+      gesture_type: "none",
+      gesture_region: null,
+      segment: null,
+      confidence: 0.88,
+    },
+    [],
+    {
+      provider: "twelvelabs",
+      model: "pegasus1.5",
+      asset_id: "asset-1",
+      provider_window: providerWindow,
+      response_id: "response-1",
+      finish_reason: "stop",
+      raw_response: { data: [] },
+    },
+  );
+
+  providerWindow.start_ms = 1_500;
+  assert.deepEqual(draft.model_evidence.provider?.provider_window, {
+    start_ms: 1_000,
+    end_ms: 7_000,
+  });
+
+  assert.throws(
+    () =>
+      reconcileGestureDraft(
+        "vid1",
+        "vid1:u1",
+        analysisWindow,
+        {
+          gesture_type: "none",
+          gesture_region: null,
+          segment: null,
+          confidence: 0.88,
+        },
+        [],
+        {
+          provider: "twelvelabs",
+          model: "pegasus1.5",
+          asset_id: "asset-1",
+          provider_window: { start_ms: 8_000, end_ms: 12_000 },
+          response_id: "response-1",
+          finish_reason: "stop",
+          raw_response: { data: [] },
+        },
+      ),
+    /analysisWindow must fall within the provider evidence provider_window/,
+  );
+});

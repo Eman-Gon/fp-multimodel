@@ -3253,11 +3253,16 @@ kbd {
   box-shadow: 0 2px 6px rgb(21 33 51 / 5%);
 }
 
-.graph-canvas__controls button:hover,
+.graph-canvas__controls button:hover:not(:disabled),
 .graph-canvas__controls button[aria-pressed="true"] {
   border-color: #746ef5;
   background: #f2f1ff;
   color: #514af2;
+}
+
+.graph-canvas__controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
 }
 
 .graph-canvas__controls button svg {
@@ -3732,6 +3737,748 @@ kbd {
   .graph-canvas__controls button {
     width: 43px;
     height: 43px;
+  }
+}
+
+/* TwelveLabs integration */
+
+.twelvelabs-page {
+  min-height: 100dvh;
+  padding: 46px clamp(24px, 5vw, 76px) 72px;
+  background:
+    linear-gradient(180deg, #fafbfc 0, #fff 300px),
+    #fff;
+}
+
+.twelvelabs-header h1 {
+  margin: 0;
+  font-size: clamp(34px, 4vw, 50px);
+  font-weight: 680;
+  letter-spacing: -0.045em;
+}
+
+.twelvelabs-header p {
+  max-width: 760px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.twelvelabs-steps {
+  display: grid;
+  margin: 25px 0 18px;
+  padding: 0 0 22px;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+
+.twelvelabs-steps li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.twelvelabs-steps li:not(:last-child)::after {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  left: 52px;
+  height: 1px;
+  background: var(--line);
+  content: "";
+}
+
+.twelvelabs-steps li > span {
+  z-index: 1;
+  display: grid;
+  width: 29px;
+  height: 29px;
+  flex: 0 0 29px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.twelvelabs-steps li > span svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.1;
+}
+
+.twelvelabs-steps li strong {
+  z-index: 1;
+  padding-right: 12px;
+  background: #fff;
+  color: inherit;
+  font-weight: 660;
+}
+
+.twelvelabs-steps li.is-current,
+.twelvelabs-steps li.is-complete {
+  color: var(--ink);
+}
+
+.twelvelabs-steps li.is-current > span {
+  border-color: var(--indigo);
+  background: var(--indigo);
+  color: #fff;
+}
+
+.twelvelabs-steps li.is-complete > span {
+  border-color: var(--emerald);
+  background: var(--emerald-soft);
+  color: var(--emerald);
+}
+
+.twelvelabs-steps li.is-complete::after {
+  background: #a9d9c3;
+}
+
+.twelvelabs-workflow {
+  display: grid;
+  gap: 12px;
+}
+
+.twelvelabs-panel {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.twelvelabs-panel__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.twelvelabs-panel__heading > span {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  flex: 0 0 29px;
+  place-items: center;
+  border: 1px solid #8993a0;
+  border-radius: 50%;
+  color: #2e353e;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.twelvelabs-panel__heading h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 690;
+  letter-spacing: -0.02em;
+}
+
+.twelvelabs-connect__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+}
+
+.twelvelabs-status,
+.twelvelabs-operation {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 13px;
+}
+
+.twelvelabs-status > svg {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  stroke-width: 1.7;
+}
+
+.twelvelabs-status strong,
+.twelvelabs-operation strong {
+  font-size: 13px;
+}
+
+.twelvelabs-status p,
+.twelvelabs-operation p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.twelvelabs-status--ready > svg,
+.twelvelabs-status--ready .twelvelabs-status__title > span {
+  color: var(--emerald);
+}
+
+.twelvelabs-status--empty > svg,
+.twelvelabs-status--loading > svg {
+  color: var(--muted);
+}
+
+.twelvelabs-status--failed > svg {
+  color: var(--danger);
+}
+
+.twelvelabs-status__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.twelvelabs-status__title code {
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.twelvelabs-status__title > span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: #636d78;
+  font-size: 9px;
+  font-weight: 680;
+}
+
+.twelvelabs-secondary-action {
+  min-width: 126px;
+  gap: 7px;
+  padding: 0 13px;
+}
+
+.twelvelabs-secondary-action svg,
+.twelvelabs-primary-action svg,
+.twelvelabs-analyze-action svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.8;
+}
+
+.twelvelabs-index-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 184px;
+  align-items: end;
+  gap: 20px;
+}
+
+.twelvelabs-field,
+.twelvelabs-time-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.twelvelabs-field > span,
+.twelvelabs-time-field > span {
+  color: #343b44;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.twelvelabs-field input,
+.twelvelabs-time-field input {
+  width: 100%;
+  height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.twelvelabs-time-field input {
+  font-variant-numeric: tabular-nums;
+}
+
+.twelvelabs-field small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.twelvelabs-primary-action {
+  min-height: 42px;
+  gap: 8px;
+  padding: 0 16px;
+}
+
+.twelvelabs-operation {
+  min-height: 67px;
+  margin-top: 13px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  background: var(--surface-soft);
+}
+
+.twelvelabs-operation > svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  stroke-width: 1.8;
+}
+
+.twelvelabs-operation--empty {
+  border-left-color: var(--line-strong);
+}
+
+.twelvelabs-operation--processing {
+  border-left-color: var(--indigo);
+  background: var(--indigo-soft);
+  color: #3f3997;
+}
+
+.twelvelabs-operation--ready {
+  border-color: #b9dfcd;
+  border-left-color: var(--emerald);
+  background: var(--emerald-soft);
+  color: #12633f;
+}
+
+.twelvelabs-operation--ready p {
+  color: #48715f;
+}
+
+.twelvelabs-operation--failed {
+  border-color: #e7bebe;
+  border-left-color: var(--danger);
+  background: #fff4f4;
+  color: var(--danger);
+}
+
+.twelvelabs-operation--failed p {
+  color: #8d4c4c;
+}
+
+.twelvelabs-analyze {
+  padding-bottom: 17px;
+}
+
+.twelvelabs-window-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 22px;
+}
+
+.twelvelabs-window-heading h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.twelvelabs-window-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.twelvelabs-window-heading output {
+  color: #3e4751;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.twelvelabs-timeline {
+  margin: 14px 0 16px;
+  padding: 0 4px;
+}
+
+.twelvelabs-timeline figcaption {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  color: #46505c;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.twelvelabs-timeline figcaption strong {
+  color: #515a65;
+  font-weight: 630;
+}
+
+.twelvelabs-timeline figcaption span:last-child {
+  text-align: right;
+}
+
+.twelvelabs-timeline__rail {
+  position: relative;
+  height: 31px;
+  margin-top: 4px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent calc(8.333% - 1px),
+      #b9c0c9 calc(8.333% - 1px),
+      #b9c0c9 8.333%
+    )
+    center / 100% 7px no-repeat;
+}
+
+.twelvelabs-timeline__rail::before {
+  position: absolute;
+  top: 15px;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: #697583;
+  content: "";
+}
+
+.twelvelabs-timeline__rail::after {
+  position: absolute;
+  top: 8px;
+  right: 0;
+  bottom: 8px;
+  left: 0;
+  border-right: 2px solid var(--coral);
+  border-left: 2px solid var(--coral);
+  content: "";
+}
+
+.twelvelabs-timeline__rail i {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  bottom: 8px;
+  left: var(--particle-start);
+  width: max(4px, var(--particle-width));
+  border-right: 2px solid var(--coral);
+  border-left: 2px solid var(--coral);
+  background: var(--coral-soft);
+}
+
+.twelvelabs-timeline__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 24px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.twelvelabs-timeline__legend span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.twelvelabs-timeline__legend span::before {
+  width: 18px;
+  height: 1px;
+  background: #697583;
+  content: "";
+}
+
+.twelvelabs-timeline__legend span:last-child::before {
+  height: 9px;
+  border-right: 1px solid var(--coral);
+  border-left: 1px solid var(--coral);
+  background: var(--coral-soft);
+}
+
+.twelvelabs-timeline--empty {
+  display: flex;
+  min-height: 78px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px dashed var(--line-strong);
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+.twelvelabs-timeline--empty svg {
+  width: 17px;
+  height: 17px;
+}
+
+.twelvelabs-timeline--empty p {
+  margin: 0;
+  font-size: 10px;
+}
+
+.twelvelabs-time-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(122px, 1fr));
+  gap: 12px;
+}
+
+.twelvelabs-field-help,
+.twelvelabs-field-error {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.twelvelabs-field-error {
+  color: var(--danger);
+}
+
+.twelvelabs-analyze-action {
+  min-width: 238px;
+  min-height: 44px;
+  gap: 8px;
+  justify-self: end;
+  margin-top: 11px;
+  padding: 0 17px;
+}
+
+.twelvelabs-analyze form {
+  display: grid;
+}
+
+.twelvelabs-result {
+  display: flex;
+  min-height: 86px;
+  align-items: center;
+  gap: 14px;
+  margin-top: 15px;
+  padding: 15px 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.twelvelabs-result > svg {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  stroke-width: 1.7;
+}
+
+.twelvelabs-result h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.twelvelabs-result p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.twelvelabs-result--processing {
+  border-color: #c8c5ff;
+  background: var(--indigo-soft);
+  color: #3f3997;
+}
+
+.twelvelabs-result--failed {
+  border-color: #e7bebe;
+  border-left: 3px solid var(--danger);
+  background: #fff4f4;
+  color: var(--danger);
+}
+
+.twelvelabs-result--suggestion {
+  display: grid;
+  grid-template-columns: minmax(290px, 0.8fr) minmax(0, 1.2fr);
+  border-color: var(--indigo);
+  background:
+    linear-gradient(90deg, rgb(238 236 255 / 72%), #fff 62%),
+    #fff;
+  color: #332e86;
+}
+
+.twelvelabs-result__intro {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.twelvelabs-result__intro > svg {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+
+.twelvelabs-result--suggestion p {
+  color: #5f5b87;
+}
+
+.twelvelabs-result dl {
+  display: grid;
+  margin: 0;
+  padding-left: 18px;
+  grid-template-columns: repeat(6, minmax(74px, 1fr));
+  border-left: 1px solid #c8c5ff;
+}
+
+.twelvelabs-result dl > div {
+  min-width: 0;
+  padding: 3px 8px;
+}
+
+.twelvelabs-result dt {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.twelvelabs-result dd {
+  overflow: hidden;
+  margin: 5px 0 0;
+  color: var(--indigo);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.twelvelabs-page .is-spinning {
+  animation: twelvelabs-spin 900ms linear infinite;
+}
+
+@keyframes twelvelabs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1080px) {
+  .twelvelabs-result--suggestion {
+    grid-template-columns: 1fr;
+  }
+
+  .twelvelabs-result dl {
+    padding: 12px 0 0;
+    border-top: 1px solid #c8c5ff;
+    border-left: 0;
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 780px) {
+  .twelvelabs-page {
+    min-height: calc(100dvh - 64px);
+    padding: 32px 18px 52px;
+  }
+
+  .twelvelabs-index-form {
+    grid-template-columns: minmax(0, 1fr) 170px;
+  }
+
+  .twelvelabs-time-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .twelvelabs-header h1 {
+    font-size: 36px;
+  }
+
+  .twelvelabs-steps {
+    gap: 0;
+    padding-bottom: 16px;
+    grid-template-columns: 1fr;
+  }
+
+  .twelvelabs-steps li {
+    min-height: 49px;
+  }
+
+  .twelvelabs-steps li:not(:last-child)::after {
+    top: 30px;
+    bottom: -19px;
+    left: 14px;
+    width: 1px;
+    height: auto;
+  }
+
+  .twelvelabs-steps li strong {
+    background: transparent;
+  }
+
+  .twelvelabs-panel {
+    padding: 16px 14px;
+  }
+
+  .twelvelabs-connect__body,
+  .twelvelabs-index-form {
+    grid-template-columns: 1fr;
+  }
+
+  .twelvelabs-secondary-action,
+  .twelvelabs-primary-action,
+  .twelvelabs-analyze-action {
+    width: 100%;
+  }
+
+  .twelvelabs-window-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .twelvelabs-timeline figcaption {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .twelvelabs-timeline figcaption strong {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    text-align: center;
+  }
+
+  .twelvelabs-result {
+    padding: 15px;
+  }
+
+  .twelvelabs-result dl {
+    grid-template-columns: 1fr;
+  }
+
+  .twelvelabs-result dl > div {
+    display: grid;
+    padding: 5px 0;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid #dedcff;
+  }
+
+  .twelvelabs-result dl > div:last-child {
+    border-bottom: 0;
+  }
+
+  .twelvelabs-result dd {
+    margin: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .twelvelabs-header h1 {
+    font-size: 32px;
+  }
+
+  .twelvelabs-time-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .twelvelabs-status__title {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

@@ -154,10 +154,19 @@ ASR-origin transcripts store two separate records:
   identity, and hashes for both the verified audio and raw provider output
 - an editable working transcript used for human correction and alignment
 
+The original suggestion and exact raw provider JSON are persisted separately
+as a content-addressed, append-only A2 artifact. The editable transcript stores
+the artifact digest. Validation and corpus preparation must fail if that
+artifact is missing, changed, replaced inside the transcript, or discarded by
+relabeling the transcript as researcher-origin.
+
 Working utterances retain `source_segment_ids` pointing back to one or more
 original ASR segments. This lineage must survive text edits, retiming,
 speaker correction, and segmentation splits or merges. The original suggestion
-is never replaced by the reviewed value.
+is never replaced by the reviewed value. Confirmation records the human
+accept/edit action, reviewer identity, timestamp, and reviewed artifact digest.
+A confirmed ASR utterance must have a reviewed, video-scoped speaker identity;
+the draft `spk_unknown` placeholder cannot enter alignment.
 
 The corrected transcript provides evidence for particle detection and sentence
 type. Video and audio provide evidence for gesture and tone. Participant

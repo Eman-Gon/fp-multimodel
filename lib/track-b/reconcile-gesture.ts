@@ -45,6 +45,12 @@ export function reconcileGestureDraft(
   }
   if (providerEvidence !== undefined) {
     assertProviderEvidence(providerEvidence);
+    assertContained(
+      analysisWindow,
+      providerEvidence.provider_window,
+      "analysisWindow",
+      "provider evidence provider_window",
+    );
   }
 
   for (const [index, interval] of motionIntervals.entries()) {
@@ -167,9 +173,10 @@ function assertContained(
   inner: TimeRange,
   outer: TimeRange,
   label: string,
+  outerLabel = "analysis window",
 ): void {
   if (inner.start_ms < outer.start_ms || inner.end_ms > outer.end_ms) {
-    throw new RangeError(`${label} must fall within the analysis window`);
+    throw new RangeError(`${label} must fall within the ${outerLabel}`);
   }
 }
 
@@ -192,6 +199,7 @@ function cloneModelEvidence(
       : {
           provider: {
             ...providerEvidence,
+            provider_window: { ...providerEvidence.provider_window },
             raw_response: structuredClone(providerEvidence.raw_response),
           },
         }),
@@ -199,32 +207,65 @@ function cloneModelEvidence(
 }
 
 function assertProviderEvidence(
-  evidence: SemanticGestureProviderEvidence,
-): void {
+  value: unknown,
+): asserts value is SemanticGestureProviderEvidence {
+  if (!isRecord(value)) {
+    throw new TypeError("provider evidence must be an object");
+  }
+  const keys = Object.keys(value).sort();
+  const expectedKeys = [
+    "asset_id",
+    "finish_reason",
+    "model",
+    "provider",
+    "provider_window",
+    "raw_response",
+    "response_id",
+  ];
   if (
-    evidence.provider !== "twelvelabs" ||
-    evidence.model !== "pegasus1.5"
+    keys.length !== expectedKeys.length ||
+    keys.some((key, index) => key !== expectedKeys[index])
+  ) {
+    throw new TypeError("provider evidence has unexpected fields");
+  }
+  if (
+    value.provider !== "twelvelabs" ||
+    value.model !== "pegasus1.5"
   ) {
     throw new TypeError(
       "provider evidence must identify TwelveLabs Pegasus 1.5",
     );
   }
-  assertNonEmptyId(evidence.asset_id, "provider evidence asset_id");
-  assertTimeRange(evidence.provider_window, "provider evidence provider_window");
-  if (
-    evidence.response_id !== null &&
-    typeof evidence.response_id !== "string"
-  ) {
-    throw new TypeError("provider evidence response_id must be a string or null");
+  assertNonEmptyId(value.asset_id, "provider evidence asset_id");
+  if (!isRecord(value.provider_window)) {
+    throw new TypeError("provider evidence provider_window must be an object");
   }
+  assertTimeRange(
+    value.provider_window as unknown as TimeRange,
+    "provider evidence provider_window",
+  );
   if (
-    evidence.finish_reason !== null &&
-    typeof evidence.finish_reason !== "string"
+    value.response_id !== null &&
+    (typeof value.response_id !== "string" ||
+      value.response_id.trim().length === 0)
   ) {
     throw new TypeError(
-      "provider evidence finish_reason must be a string or null",
+      "provider evidence response_id must be null or a non-empty string",
     );
   }
+  if (
+    value.finish_reason !== null &&
+    (typeof value.finish_reason !== "string" ||
+      value.finish_reason.trim().length === 0)
+  ) {
+    throw new TypeError(
+      "provider evidence finish_reason must be null or a non-empty string",
+    );
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function draftField<T>(

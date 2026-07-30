@@ -329,4 +329,13 @@ test("preserves validated provider-native evidence through review import", () =>
       .provider,
     draft.model_evidence.provider,
   );
+
+  const beyondVideo = structuredClone(draft);
+  Object.assign(beyondVideo.model_evidence.provider!.provider_window, {
+    end_ms: 183_001,
+  });
+  assert.throws(
+    () => mergeTrackBGestureDrafts(importableClip(), [beyondVideo]),
+    /provider_window must not exceed the source video duration/,
+  );
 });
