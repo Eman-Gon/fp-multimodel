@@ -4,7 +4,7 @@ import pytest
 
 from fp_multimodel.models import AlignedInterval, UtteranceAlignment
 from fp_multimodel.particles import detect_final_particle, detect_particles
-from fp_multimodel.vocab import TARGET_PARTICLES
+from fp_multimodel.vocab import EXTENDED_PARTICLE_CANDIDATES, TARGET_PARTICLES
 
 
 def interval(surface_form: str, start_ms: int, end_ms: int) -> AlignedInterval:
@@ -13,6 +13,15 @@ def interval(surface_form: str, start_ms: int, end_ms: int) -> AlignedInterval:
         start_ms=start_ms,
         end_ms=end_ms,
     )
+
+
+def test_extended_candidates_are_unique_and_not_silently_promoted() -> None:
+    assert len(EXTENDED_PARTICLE_CANDIDATES) == len(
+        set(EXTENDED_PARTICLE_CANDIDATES)
+    )
+    assert set(EXTENDED_PARTICLE_CANDIDATES).isdisjoint(TARGET_PARTICLES)
+    assert "哇" in EXTENDED_PARTICLE_CANDIDATES
+    assert "了吗吧" in EXTENDED_PARTICLE_CANDIDATES
 
 
 @pytest.mark.parametrize(("token", "pinyin"), TARGET_PARTICLES.items())

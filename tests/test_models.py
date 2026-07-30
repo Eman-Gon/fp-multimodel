@@ -6,9 +6,11 @@ from fp_multimodel.models import (
     LinguisticContext,
     ParticleDetectionResult,
     ParticleInstance,
+    SpeakerProfile,
     Transcript,
     TranscriptBatch,
     Utterance,
+    VideoReference,
 )
 
 
@@ -58,6 +60,31 @@ def test_transcript_batch_rejects_duplicate_video_ids() -> None:
             project_id="project-1",
             transcripts=[transcript, transcript],
         )
+
+
+def test_speaker_region_requires_explicit_value_before_confirmation() -> None:
+    with pytest.raises(ValidationError, match="confirmed speaker region"):
+        SpeakerProfile(
+            id="spkA",
+            label="Speaker A",
+            region_confirmed=True,
+        )
+
+
+def test_transcript_batch_retains_unverified_public_video_reference() -> None:
+    batch = TranscriptBatch(
+        project_id="project-1",
+        transcripts=[Transcript(video_id="vid1", utterances=[])],
+        video_references=[
+            VideoReference(
+                id="yt_OvX0ccTNYDs",
+                source_url="https://www.youtube.com/watch?v=OvX0ccTNYDs",
+                platform="youtube",
+            )
+        ],
+    )
+
+    assert batch.video_references[0].region_verification == "unverified"
 
 
 def test_traditional_ma_is_canonicalized_while_surface_text_is_preserved() -> None:

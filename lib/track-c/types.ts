@@ -51,6 +51,7 @@ export interface ParticipantOption {
   readonly id: string;
   readonly label: string;
   readonly region: string | null;
+  readonly region_source: string | null;
   readonly region_confirmed: boolean;
 }
 

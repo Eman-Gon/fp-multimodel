@@ -26,6 +26,17 @@ Linguistics research assistants currently annotate gesture–particle data by ha
 
 **Normalization rule:** canonicalize to simplified on ingest. Store the original form in a `surface_form` field so nothing is lost.
 
+The validated detector remains limited to the seven forms above. The
+researcher-supplied extended candidate inventory lives in
+`EXTENDED_PARTICLE_CANDIDATES`. Do not promote lexical/aspectual forms or
+stacked sequences to canonical `FP_token` without explicit linguistic,
+orthographic, pinyin, and tokenization review. Candidate sequence detection
+must use longest-suffix matching across aligned intervals.
+
+**Speaker region:** store region and attribution evidence as human-reviewable
+speaker metadata. Never infer region from appearance or an unsupported accent
+impression. Unknown/unverified is a valid and preferable state.
+
 ---
 
 ## Controlled Vocabularies

@@ -26,6 +26,12 @@ speaker namespaces, transcripts, alignment artifacts, and particle instances
 remain separate while the Coding Queue and Clip Explorer provide corpus-wide
 views across the project.
 
+The project may retain public video references before ingest. The current
+reference registry includes
+[`https://www.youtube.com/watch?v=OvX0ccTNYDs`](https://www.youtube.com/watch?v=OvX0ccTNYDs);
+its title, speaker identities, and regional origins remain explicitly
+unverified.
+
 A human researcher reviews and corrects the AI's draft coding — transcription and gesture classification are the two places automation is least reliable, so those are built as checkpoints, not black boxes.
 
 ## Meaning analysis
@@ -45,6 +51,11 @@ interpretation as an established linguistic fact.
 Each clip also retains its discourse context, corrected utterance, sentence,
 and clause boundaries. This supports both semantic analysis and a later
 learner-facing view that explains how verbal and non-verbal cues coalesce.
+
+The original seven particles remain the validated detector vocabulary. A
+larger researcher-supplied list of single forms and stacked sequences is stored
+as an extended candidate inventory pending orthographic, tokenization, pinyin,
+and linguistic-function review.
 
 The complete product and annotation requirements are recorded in
 [`docs/product-spec.md`](docs/product-spec.md).

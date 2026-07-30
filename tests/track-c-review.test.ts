@@ -8,6 +8,11 @@ import {
   targetKey,
 } from "../lib/track-c/review.ts";
 import { createDemoClip, createDemoClips } from "../lib/track-c/seed.ts";
+import { VIDEO_SOURCE_REFERENCES } from "../lib/track-c/sources.ts";
+import {
+  EXTENDED_PARTICLE_CANDIDATES,
+  TARGET_PARTICLES,
+} from "../lib/vocab.ts";
 import type {
   ClipDetail,
   FieldTarget,
@@ -221,6 +226,25 @@ test("demo corpus contains clips from multiple independent videos", () => {
       particle_instances[0]?.fields.fp_token.value,
     ),
     ["吗", "吧"],
+  );
+});
+
+test("extended candidates and external source remain explicitly unverified", () => {
+  assert.equal(
+    new Set(EXTENDED_PARTICLE_CANDIDATES).size,
+    EXTENDED_PARTICLE_CANDIDATES.length,
+  );
+  const canonical = new Set(TARGET_PARTICLES.map(({ token }) => token));
+  assert.equal(
+    EXTENDED_PARTICLE_CANDIDATES.some((candidate) =>
+      canonical.has(candidate as never),
+    ),
+    false,
+  );
+  assert.equal(VIDEO_SOURCE_REFERENCES[0]?.id, "yt_OvX0ccTNYDs");
+  assert.equal(
+    VIDEO_SOURCE_REFERENCES[0]?.region_verification,
+    "unverified",
   );
 });
 

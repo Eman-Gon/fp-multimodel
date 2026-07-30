@@ -13,6 +13,11 @@ learners. A learner should be able to see how verbal and non-verbal cues work
 together in authentic examples without confusing an automated suggestion with
 a confirmed linguistic interpretation.
 
+Its educational purpose is to help people recognize Mandarin sentence-final
+particles as utterance-final emphasis and stance cues, then understand how
+their interpretation changes with tone, sentence type, discourse context, and
+visible gesture.
+
 ## Target particles
 
 The controlled target inventory is:
@@ -28,9 +33,33 @@ The controlled target inventory is:
 | ma | 吗 | 吗, 嗎 |
 
 Traditional `嗎` is retained as the observed `surface_form` and normalized to
-canonical `fp_token: "吗"` for querying. “Wa” is not part of the declared
-target inventory and must not be introduced without a separate research
-decision.
+canonical `fp_token: "吗"` for querying.
+
+### Extended researcher-supplied candidates
+
+The following forms are retained as an extended candidate inventory:
+
+```
+了 的 嘛 罢了 而已 哇 哪 呕 哟 罢 呗 啵 咯 啰 喽 噢 喔
+
+了吗 了吧 了呢 的吗 的吧 的呢 了啊 的啦 的嘛 的哦 了哦
+吧啊 呢啊 吗啊 啦啊 呗啊 吧吗 呢吧 了啦 吧啦 呢啦 嘛啦 哦啦
+
+了吗吧 了呢吧 了的吧 了吗呢 了吧呢 了呢吗 的了吗 了吧吗
+的吗呢 的呢吗 了的吗 的了吧 的呢吧 了啊吧 了呢啊 了吗啊
+了吧啊 的啦啊 的哦啊 了哦啊 吧了呢 吗了呢 呢了吧
+```
+
+`wa` now corresponds to the explicitly supplied candidate 哇. These
+candidates are not automatically equivalent to the validated seven-token
+inventory. Several can be lexical, aspectual, modal, orthographic variants, or
+stacked sequences depending on context. `呕` in particular requires
+orthographic review.
+
+Before promotion to canonical `FP_token`, a researcher must validate spelling,
+normalization, sentence-final position, tokenization, communicative function,
+and pinyin. Candidate detection must use longest-suffix matching across aligned
+intervals so `了吗吧` is not silently reduced to `吧`.
 
 ## Unit of analysis
 
@@ -88,6 +117,7 @@ identities remain structured metadata.
 - proposed communicative meaning or function
 - evidence-based explanation for that proposed meaning
 - human review status and provenance
+- speaker and addressee regional-origin metadata with verification state
 
 ### Per particle instance
 
@@ -164,6 +194,22 @@ emphasis, topic continuation, other, and uncertain.
 - permits failed videos to be retried without rerunning completed videos
 - never combines millisecond or frame coordinates across videos
 - exposes project-wide counts only from the selected review states
+- stores public reference URLs separately from downloaded or ingested media
+
+### Video references and speaker origin
+
+The initial external reference list includes:
+
+- [YouTube reference `OvX0ccTNYDs`](https://www.youtube.com/watch?v=OvX0ccTNYDs)
+
+Its title, speaker identities, native-language background, and regional origins
+remain unverified. Before corpus ingest, the researcher records a stable speaker
+ID, source-supported region, attribution evidence, and human confirmation.
+Region must never be inferred solely from appearance, unsupported accent
+impressions, or the video URL.
+
+The machine-readable record is
+[`docs/video-sources.json`](video-sources.json).
 
 ### Transcript review
 
@@ -184,8 +230,9 @@ emphasis, topic continuation, other, and uncertain.
 - corrected transcript with the target particle highlighted
 - review controls for speaker, addressee, particle, gesture, sentence type,
   tone, linguistic context, and meaning
-- a metadata information panel containing speaker, addressee, final particle,
-  particle start and end, clip start and end, `FP_count`, and sentence type
+- a metadata information panel containing speaker, addressee, their regional
+  origin and verification state, final particle, particle start and end, clip
+  start and end, `FP_count`, and sentence type
 - explicit confirmation before a clip enters the reviewed corpus
 
 ### Clip explorer
