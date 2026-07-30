@@ -113,9 +113,12 @@ a {
   border: 1px solid rgb(255 255 255 / 18%);
   border-radius: 12px;
   background: rgb(255 255 255 / 6%);
-  font-family: "Noto Sans SC", "PingFang SC", sans-serif;
-  font-size: 23px;
-  font-weight: 650;
+}
+
+.app-nav__mark svg {
+  width: 23px;
+  height: 23px;
+  stroke-width: 1.7;
 }
 
 .app-nav__items {
@@ -523,8 +526,7 @@ a {
 
 .timeline__waveform i {
   min-width: 1px;
-  flex: 1 1 1px;
-  max-width: 3px;
+  flex: 1 1 0;
   border-radius: 2px;
   background: #c8ced5;
   opacity: 0.82;
@@ -606,7 +608,24 @@ a {
   white-space: nowrap;
 }
 
+.range-track__selection span {
+  position: absolute;
+  z-index: 3;
+  top: -19px;
+  left: 50%;
+  min-width: 92px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--indigo-soft);
+  text-align: center;
+  transform: translateX(-50%);
+}
+
 .range-track--gesture .range-track__selection {
+  background: var(--coral-soft);
+}
+
+.range-track--gesture .range-track__selection span {
   background: var(--coral-soft);
 }
 
@@ -619,6 +638,7 @@ a {
   margin: 0;
   appearance: none;
   background: transparent;
+  color: inherit;
   pointer-events: none;
 }
 
@@ -693,7 +713,7 @@ a {
 
 .field-inspector__header h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 690;
   letter-spacing: -0.01em;
 }
@@ -701,7 +721,7 @@ a {
 .field-inspector__header p {
   margin: 2px 0 0;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .provenance-legend {
@@ -709,7 +729,7 @@ a {
   align-items: center;
   gap: 12px;
   color: #4d5660;
-  font-size: 9px;
+  font-size: 10px;
   white-space: nowrap;
 }
 
@@ -746,7 +766,7 @@ a {
   justify-content: space-between;
   margin: 0;
   border-bottom: 1px solid var(--line);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 680;
 }
 
@@ -780,13 +800,13 @@ a {
   flex-direction: column;
   gap: 1px;
   padding-left: 5px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .field-row__label small {
   overflow: hidden;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -836,7 +856,7 @@ a {
   border-radius: 5px;
   background-color: #fff;
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
 }
 
@@ -848,7 +868,7 @@ a {
 
 .field-row__meta {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -895,7 +915,7 @@ a {
   border: 1px solid transparent;
   border-radius: 5px;
   color: #343a42;
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -943,13 +963,13 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 590;
 }
 
 .save-state {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
 }
 
@@ -979,7 +999,7 @@ a {
   gap: 6px 12px;
   margin-bottom: 12px;
   color: #5a636d;
-  font-size: 8px;
+  font-size: 9px;
 }
 
 .keyboard-hints span {

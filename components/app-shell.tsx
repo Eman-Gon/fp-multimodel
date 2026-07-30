@@ -7,6 +7,7 @@ import {
   FileAudio2,
   Lightbulb,
   ListChecks,
+  Menu,
   Network,
   Upload,
 } from "lucide-react";
@@ -30,7 +31,7 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           className="app-nav__mark"
           aria-label="Final Particle Lab home"
         >
-          末
+          <Menu aria-hidden="true" />
         </Link>
         <div className="app-nav__items">
           {NAV_ITEMS.map(({ label, href, Icon }) => {
@@ -70,4 +71,3 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     </div>
   );
 }
-

@@ -51,7 +51,12 @@ export function TimelineEditor({
     for (let value = 0; value < durationMs; value += 1_000) {
       values.push(value);
     }
-    values.push(durationMs);
+    const lastTick = values.at(-1);
+    if (lastTick !== undefined && durationMs - lastTick < 600) {
+      values[values.length - 1] = durationMs;
+    } else {
+      values.push(durationMs);
+    }
     return values;
   }, [durationMs]);
 
@@ -301,4 +306,3 @@ function RangeTrack({
     </fieldset>
   );
 }
-
