@@ -41,6 +41,19 @@ def test_normalize_requires_stable_video_id() -> None:
     assert args.video_id == "vid03"
 
 
+def test_batch_validation_exposes_video_scoped_artifact_root() -> None:
+    args = build_parser().parse_args(
+        [
+            "validate-transcript-batch",
+            "work/project/transcripts.json",
+            "--artifact-root",
+            "work/project/videos",
+        ]
+    )
+
+    assert args.artifact_root.as_posix() == "work/project/videos"
+
+
 def test_transcribe_exposes_concrete_whisper_configuration() -> None:
     parser = build_parser()
 

@@ -35,6 +35,7 @@ def test_aligns_with_required_models(tmp_path: Path) -> None:
         TrackAManifest(
             stage="corpus",
             video_id="vid1",
+            transcript_origin="researcher",
             duration_ms=20_000,
             fps=30,
             transcript_sha256="a" * 64,
@@ -54,7 +55,9 @@ def test_aligns_with_required_models(tmp_path: Path) -> None:
     assert commands[0][3:5] == [DICTIONARY_MODEL, ACOUSTIC_MODEL]
     assert commands[0][-1] == "--clean"
     manifest = load_manifest(tmp_path / "aligned", expected_stage="alignment")
+    assert manifest.schema_version == 3
     assert manifest.transcript_sha256 == "a" * 64
+    assert manifest.transcript_origin == "researcher"
     assert manifest.duration_ms == 20_000
     assert manifest.fps == 30
     assert manifest.normalized_video_sha256 == "c" * 64
@@ -62,13 +65,14 @@ def test_aligns_with_required_models(tmp_path: Path) -> None:
     assert manifest.acoustic_model == ACOUSTIC_MODEL
 
 
-def test_track_a_manifest_v1_requires_regeneration(tmp_path: Path) -> None:
+def test_track_a_manifest_v2_requires_regeneration(tmp_path: Path) -> None:
     (tmp_path / "track-a-manifest.json").write_text(
         """
         {
-          "schema_version": 1,
+          "schema_version": 2,
           "stage": "corpus",
           "video_id": "vid1",
+          "transcript_origin": "researcher",
           "duration_ms": 20000,
           "fps": 30,
           "transcript_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -83,3 +87,17 @@ def test_track_a_manifest_v1_requires_regeneration(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError, match="schema_version"):
         load_manifest(tmp_path, expected_stage="corpus")
+
+
+def test_asr_manifest_requires_direct_suggestion_provenance() -> None:
+    with pytest.raises(ValidationError, match="suggestion artifact digest"):
+        TrackAManifest(
+            stage="corpus",
+            video_id="vid1",
+            transcript_origin="asr",
+            duration_ms=20_000,
+            fps=30,
+            transcript_sha256="a" * 64,
+            source_audio_sha256="b" * 64,
+            normalized_video_sha256="c" * 64,
+        )

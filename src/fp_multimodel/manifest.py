@@ -35,9 +35,10 @@ class MediaManifest(StrictModel):
 class TrackAManifest(StrictModel):
     """Identity and provenance for a prepared corpus or alignment output."""
 
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     stage: Literal["corpus", "alignment"]
     video_id: str = Field(min_length=1)
+    transcript_origin: Literal["researcher", "asr"]
     duration_ms: Annotated[int, Field(gt=0)]
     fps: Literal[30]
     transcript_sha256: str = Field(pattern=SHA256_PATTERN)
@@ -52,6 +53,20 @@ class TrackAManifest(StrictModel):
 
     @model_validator(mode="after")
     def require_models_for_alignment(self) -> "TrackAManifest":
+        if (
+            self.transcript_origin == "asr"
+            and self.asr_suggestion_artifact_sha256 is None
+        ):
+            raise ValueError(
+                "ASR-derived manifests require the suggestion artifact digest"
+            )
+        if (
+            self.transcript_origin == "researcher"
+            and self.asr_suggestion_artifact_sha256 is not None
+        ):
+            raise ValueError(
+                "researcher-origin manifests cannot claim an ASR suggestion artifact"
+            )
         if self.stage == "alignment" and (
             self.dictionary_model is None or self.acoustic_model is None
         ):

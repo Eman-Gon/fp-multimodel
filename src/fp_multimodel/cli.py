@@ -39,6 +39,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="validate a project JSON file containing multiple video transcripts",
     )
     validate_batch.add_argument("batch", type=Path)
+    validate_batch.add_argument(
+        "--artifact-root",
+        type=Path,
+        help=(
+            "directory containing one video-scoped <video_id>/asr-suggestions "
+            "folder per ASR transcript (defaults to the batch file's directory)"
+        ),
+    )
 
     normalize = subparsers.add_parser(
         "normalize",
@@ -114,7 +122,10 @@ def _dispatch(args: argparse.Namespace) -> None:
         return
 
     if args.command == "validate-transcript-batch":
-        batch = load_transcript_batch(args.batch)
+        batch = load_transcript_batch(
+            args.batch,
+            artifact_root=args.artifact_root,
+        )
         utterance_count = sum(
             len(transcript.utterances) for transcript in batch.transcripts
         )

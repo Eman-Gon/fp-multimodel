@@ -155,6 +155,9 @@ The Whisper adapter is implemented behind the provider-neutral A2 boundary.
 Each run writes an append-only, content-addressed sidecar containing the exact
 raw provider JSON and original segment suggestions; reviewed transcripts remain
 hash-bound to that sidecar.
+Batch validation expects those sidecars under
+`<artifact-root>/<video_id>/asr-suggestions/` and verifies every embedded
+suggestion rather than performing structural validation alone.
 Sentence-type classification (A6) and nested discourse structure (A7) remain
 next increments. `examples/transcript.draft.json` demonstrates the persisted
 suggestion/working-copy contract.
@@ -195,6 +198,10 @@ uv run fp-track-a transcribe \
 # and transcript_confirmed=true to every included utterance.
 uv run fp-track-a validate-transcript work/vid03/transcript.reviewed.json
 
+# For a project batch, point validation at its video-scoped artifact root.
+uv run fp-track-a validate-transcript-batch work/project/transcripts.json \
+  --artifact-root work/project/videos
+
 # A3: this command refuses unconfirmed transcripts.
 uv run fp-track-a prepare-corpus \
   work/vid03/transcript.reviewed.json \
@@ -216,7 +223,7 @@ uv run fp-track-a detect-fps \
 
 All canonical times are integer milliseconds. Frame numbers remain derived UI
 values (`round(ms / 1000 * fps)`) and are never persisted by Track A.
-Corpus/alignment manifests are schema version 2; regenerate older Track A
+Corpus/alignment manifests are schema version 3; regenerate older Track A
 artifacts because the transcript hash now includes A2 and review provenance.
 
 ## Track B foundation

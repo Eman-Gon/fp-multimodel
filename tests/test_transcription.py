@@ -15,7 +15,7 @@ from fp_multimodel.manifest import (
     transcript_sha256,
     write_media_manifest,
 )
-from fp_multimodel.jsonio import load_transcript
+from fp_multimodel.jsonio import load_transcript, load_transcript_batch
 from fp_multimodel.models import Transcript
 from fp_multimodel.transcription import (
     AsrRun,
@@ -285,8 +285,8 @@ def test_committed_transcript_examples_validate_and_round_trip(
 
 
 def test_multiple_videos_remain_separate_in_a_draft_batch(tmp_path: Path) -> None:
-    first_audio = make_verified_audio(tmp_path / "first", video_id="vid1")
-    second_audio = make_verified_audio(tmp_path / "second", video_id="vid2")
+    first_audio = make_verified_audio(tmp_path / "vid1", video_id="vid1")
+    second_audio = make_verified_audio(tmp_path / "vid2", video_id="vid2")
 
     batch = create_draft_transcript_batch(
         "project-1",
@@ -297,6 +297,21 @@ def test_multiple_videos_remain_separate_in_a_draft_batch(tmp_path: Path) -> Non
     assert [item.video_id for item in batch.transcripts] == ["vid1", "vid2"]
     assert all(item.utterances[0].start_ms == 12_400 for item in batch.transcripts)
     assert all(item.asr_suggestion is not None for item in batch.transcripts)
+    batch_path = tmp_path / "transcripts.json"
+    batch_path.write_text(batch.model_dump_json(indent=2), encoding="utf-8")
+    loaded = load_transcript_batch(batch_path)
+    assert [item.video_id for item in loaded.transcripts] == ["vid1", "vid2"]
+
+    changed = batch.model_dump(mode="json")
+    changed["transcripts"][0]["asr_suggestion"]["segments"][0][
+        "surface_text"
+    ] = "被覆盖"
+    batch_path.write_text(
+        json.dumps(changed, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="changed the original ASR suggestion"):
+        load_transcript_batch(batch_path)
 
 
 def test_review_lineage_supports_segment_splits_and_merges(tmp_path: Path) -> None:
@@ -468,6 +483,22 @@ def test_draft_transcription_rejects_cross_video_mutated_and_out_of_bounds_audio
     too_short = make_verified_audio(tmp_path / "short", duration_ms=15_000)
     with pytest.raises(ValueError, match="extend past the source video duration"):
         create_draft_transcript("vid1", too_short, FakeMandarinAsr())
+
+
+def test_draft_transcription_rejects_audio_changed_during_provider_run(
+    tmp_path: Path,
+) -> None:
+    audio = make_verified_audio(tmp_path)
+
+    class MutatingProvider:
+        def transcribe(self, source: Path) -> AsrRun:
+            run = FakeMandarinAsr().transcribe(source)
+            source.write_bytes(b"mutated during ASR")
+            return run
+
+    with pytest.raises(ValueError, match="changed while transcription was running"):
+        create_draft_transcript("vid1", audio, MutatingProvider())
+    assert not (tmp_path / ASR_SUGGESTION_DIRECTORY).exists()
 
 
 def test_whisper_cli_adapter_forces_mandarin_and_preserves_raw_diagnostics(

@@ -88,6 +88,7 @@ def test_asr_transcript_requires_immutable_suggestion_lineage() -> None:
                 start_ms=1000,
                 end_ms=2000,
                 surface_text="你好吗",
+                speaker="spkA",
             ),
         ),
     )
@@ -156,6 +157,7 @@ def test_confirmed_asr_transcript_requires_human_review_and_speaker_profile() ->
                 start_ms=1000,
                 end_ms=2000,
                 surface_text="你好吗",
+                speaker="spkA",
             ),
         ),
     )
@@ -220,6 +222,27 @@ def test_confirmed_asr_transcript_requires_human_review_and_speaker_profile() ->
                     end_ms=2000,
                     text="你好吧",
                     speaker="spkA",
+                    source_segment_ids=["source-1"],
+                    transcript_confirmed=True,
+                    transcript_review=review,
+                )
+            ],
+        )
+
+    with pytest.raises(ValidationError, match="changed ASR utterances"):
+        Transcript(
+            video_id="vid1",
+            transcript_origin="asr",
+            asr_suggestion=suggestion,
+            asr_suggestion_artifact_sha256="c" * 64,
+            speakers=[SpeakerProfile(id="spkB", label="Speaker B")],
+            utterances=[
+                Utterance(
+                    id="u1",
+                    start_ms=1000,
+                    end_ms=2000,
+                    text="你好吗",
+                    speaker="spkB",
                     source_segment_ids=["source-1"],
                     transcript_confirmed=True,
                     transcript_review=review,

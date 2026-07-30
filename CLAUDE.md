@@ -251,7 +251,9 @@ and every reviewed utterance retains one or more `source_segment_ids`.
 Confirmation requires a `transcript_review` record with accept/edit action,
 reviewer identity, timezone-aware timestamp, and the exact suggestion-artifact
 digest reviewed. Confirmed ASR utterances must replace `spk_unknown` with a
-speaker backed by a video-scoped `SpeakerProfile`.
+speaker backed by a video-scoped `SpeakerProfile`. `accept` is valid only when
+timing, text, segmentation, and a provider-suggested speaker are unchanged;
+assigning or correcting a speaker is an `edit`.
 ```
 corpus/
   spkA/
@@ -267,9 +269,10 @@ mfa align corpus/ mandarin_china_mfa mandarin_mfa output/
 ```
 Produces TextGrid files with word- and phone-level start/end times.
 
-Track A corpus/alignment manifests use schema version 2 because their
-transcript hash now binds the A2 sidecar and human review record. Version 1
-corpora and alignments must be regenerated rather than silently reused.
+Track A corpus/alignment manifests use schema version 3 because their
+transcript hash and direct provenance fields now bind the transcript origin,
+A2 sidecar, and human review record. Earlier corpora and alignments must be
+regenerated rather than silently reused.
 
 Parse TextGrids with `praatio` (Python). Extract word tier intervals.
 

@@ -166,7 +166,9 @@ speaker correction, and segmentation splits or merges. The original suggestion
 is never replaced by the reviewed value. Confirmation records the human
 accept/edit action, reviewer identity, timestamp, and reviewed artifact digest.
 A confirmed ASR utterance must have a reviewed, video-scoped speaker identity;
-the draft `spk_unknown` placeholder cannot enter alignment.
+the draft `spk_unknown` placeholder cannot enter alignment. Accept means the
+suggested timing, text, segmentation, and speaker were unchanged; assigning or
+correcting a speaker is recorded as an edit.
 
 The corrected transcript provides evidence for particle detection and sentence
 type. Video and audio provide evidence for gesture and tone. Participant

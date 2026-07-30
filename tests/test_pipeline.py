@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from fp_multimodel.jsonio import load_transcript
 from fp_multimodel.manifest import TrackAManifest, transcript_sha256, write_manifest
 from fp_multimodel.models import Transcript, Utterance
 from fp_multimodel.pipeline import detect_from_mfa_output
@@ -95,6 +96,7 @@ def write_alignment_manifest(path: Path, reviewed: Transcript) -> None:
         TrackAManifest(
             stage="alignment",
             video_id=reviewed.video_id,
+            transcript_origin=reviewed.transcript_origin,
             duration_ms=20_000,
             fps=30,
             transcript_sha256=transcript_sha256(reviewed),
@@ -156,6 +158,33 @@ def test_detection_rejects_stale_transcript_revision(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="different transcript revision"):
         detect_from_mfa_output(changed, tmp_path)
+
+
+def test_detection_rejects_mismatched_asr_suggestion_provenance(
+    tmp_path: Path,
+) -> None:
+    reviewed = load_transcript(
+        Path(__file__).parents[1] / "examples" / "transcript.reviewed.json"
+    )
+    write_manifest(
+        tmp_path,
+        TrackAManifest(
+            stage="alignment",
+            video_id=reviewed.video_id,
+            transcript_origin="asr",
+            duration_ms=20_000,
+            fps=30,
+            transcript_sha256=transcript_sha256(reviewed),
+            source_audio_sha256="b" * 64,
+            normalized_video_sha256="c" * 64,
+            asr_suggestion_artifact_sha256="f" * 64,
+            dictionary_model="mandarin_china_mfa",
+            acoustic_model="mandarin_mfa",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="different ASR suggestion provenance"):
+        detect_from_mfa_output(reviewed, tmp_path)
 
 
 def test_detection_preserves_longest_candidate_and_traditional_surface(

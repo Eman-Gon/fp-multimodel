@@ -293,6 +293,11 @@ def create_draft_transcript(
         )
 
     run = provider.transcribe(audio)
+    if file_sha256(audio) != source_audio_sha256:
+        raise ValueError(
+            "ASR audio changed while transcription was running; normalize and "
+            "transcribe the source video again"
+        )
     if run.language != "zh" or run.task != "transcribe":
         raise ValueError("Mandarin ASR providers must emit zh transcription results")
     if run.confidence_method not in {"provider", "exp_avg_logprob"}:

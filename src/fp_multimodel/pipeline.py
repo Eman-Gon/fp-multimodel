@@ -234,6 +234,17 @@ def detect_from_mfa_output(
             f"alignment belongs to video {manifest.video_id!r}, "
             f"not {transcript.video_id!r}"
         )
+    if manifest.transcript_origin != transcript.transcript_origin:
+        raise ValueError(
+            "alignment manifest has different transcript-origin provenance"
+        )
+    if (
+        manifest.asr_suggestion_artifact_sha256
+        != transcript.asr_suggestion_artifact_sha256
+    ):
+        raise ValueError(
+            "alignment manifest has different ASR suggestion provenance"
+        )
     out_of_bounds = [
         utterance.id
         for utterance in transcript.utterances

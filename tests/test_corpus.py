@@ -103,7 +103,9 @@ def test_prepare_corpus_writes_lab_and_precise_segment_command(
     assert commands[0][commands[0].index("-t") + 1] == "2.700"
     assert commands[0][commands[0].index("-ar") + 1] == "16000"
     manifest = load_manifest(tmp_path / "corpus", expected_stage="corpus")
+    assert manifest.schema_version == 3
     assert manifest.video_id == "vid1"
+    assert manifest.transcript_origin == "researcher"
     assert manifest.duration_ms == 20_000
     assert manifest.fps == 30
     assert manifest.normalized_video_sha256 == "b" * 64
@@ -230,7 +232,7 @@ def test_prepare_corpus_rejects_asr_suggestion_from_different_audio(
                 update={
                     "source_segment_ids": ["source-u1"],
                     "transcript_review": TranscriptReview(
-                        action="accept",
+                        action="edit",
                         reviewer_id="researcher-1",
                         reviewed_at=datetime(
                             2026,

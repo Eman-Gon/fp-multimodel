@@ -332,6 +332,7 @@ class Transcript(StrictModel):
                             or utterance.surface_text != suggested_surface
                             or utterance.text
                             != suggested_surface.replace("嗎", "吗")
+                            or utterance.speaker != suggestion.speaker
                         ):
                             raise ValueError(
                                 "changed ASR utterances require an edit review"

@@ -181,6 +181,7 @@ def prepare_mfa_corpus(
         TrackAManifest(
             stage="corpus",
             video_id=transcript.video_id,
+            transcript_origin=transcript.transcript_origin,
             duration_ms=media_manifest.duration_ms,
             fps=media_manifest.fps,
             transcript_sha256=transcript_sha256(transcript),
