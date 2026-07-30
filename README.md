@@ -114,13 +114,16 @@ Raw video
 The first runnable vertical slice lives in the Python package under
 `src/fp_multimodel`. It currently covers:
 
-- 30 fps video normalization and 16 kHz mono WAV extraction
+- verified, video-scoped 30 fps normalization and 16 kHz mono WAV extraction,
+  with source duration and SHA-256 provenance
 - strict JSON contracts for draft/reviewed utterances
 - an enforced human transcript checkpoint before alignment
 - MFA corpus preparation (`.wav` + corrected Chinese `.lab` per utterance)
 - Mandarin MFA model download/alignment command wrappers
 - `praatio` parsing of MFA word-tier TextGrids
 - utterance-final detection of 呢, 吧, 哦, 啊, 啦, 呀, and 吗/嗎
+- longest-suffix detection of the extended researcher inventory as
+  review-required candidates, without promoting them to canonical particles
 - traditional `嗎` → simplified `吗` normalization while retaining
   `surface_form`
 - deterministic `instance_id` values for the Track B handoff
@@ -129,6 +132,8 @@ The first runnable vertical slice lives in the Python package under
 - conversion of segment-local MFA timings back to source-video milliseconds
 - revision manifests that reject stale or cross-video TextGrids after a
   transcript correction
+- a versioned Track A→B artifact carrying video duration, media/transcript
+  hashes, MFA model identity, canonical particles, and review-only candidates
 - validated multi-video transcript batches with unique video identities
 - human-reviewable discourse, sentence, and clause context on each utterance
 
