@@ -1,7 +1,12 @@
 import pytest
 from pydantic import ValidationError
 
-from fp_multimodel.models import Transcript, Utterance
+from fp_multimodel.models import (
+    ParticleDetectionResult,
+    ParticleInstance,
+    Transcript,
+    Utterance,
+)
 
 
 def test_utterance_requires_forward_time_range() -> None:
@@ -40,3 +45,42 @@ def test_confidence_is_bounded() -> None:
             confidence=1.1,
         )
 
+
+def test_particle_interval_must_have_positive_duration() -> None:
+    with pytest.raises(ValidationError, match="fp_end_ms must be greater"):
+        ParticleInstance(
+            instance_id="vid1:u1",
+            fp_token="吗",
+            fp_pinyin="ma",
+            surface_form="嗎",
+            fp_start_ms=1000,
+            fp_end_ms=1000,
+            utterance_id="u1",
+        )
+
+
+def test_particle_surface_and_pinyin_must_match_canonical_token() -> None:
+    with pytest.raises(ValidationError, match="surface_form and fp_token"):
+        ParticleInstance(
+            instance_id="vid1:u1",
+            fp_token="吧",
+            fp_pinyin="ba",
+            surface_form="嗎",
+            fp_start_ms=1000,
+            fp_end_ms=1100,
+            utterance_id="u1",
+        )
+
+
+def test_particle_detection_result_rejects_duplicate_instance_ids() -> None:
+    particle = ParticleInstance(
+        instance_id="vid1:u1",
+        fp_token="吗",
+        fp_pinyin="ma",
+        surface_form="嗎",
+        fp_start_ms=1000,
+        fp_end_ms=1100,
+        utterance_id="u1",
+    )
+    with pytest.raises(ValidationError, match="instance_ids must be unique"):
+        ParticleDetectionResult(video_id="vid1", particles=[particle, particle])

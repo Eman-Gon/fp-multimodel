@@ -4,7 +4,11 @@ import {
   type GestureRegion,
   type GestureType,
 } from "../vocab.ts";
-import type { PegasusGesture, TimeRange } from "../types.ts";
+import type {
+  FinalParticleInstance,
+  PegasusGesture,
+  TimeRange,
+} from "../types.ts";
 import {
   assertConfidence,
   assertMilliseconds,
@@ -33,11 +37,23 @@ export const PEGASUS_GESTURE_RESPONSE_SCHEMA: Readonly<Record<string, unknown>> 
   },
 };
 
-export function buildPegasusGesturePrompt(window: TimeRange): string {
+export function buildPegasusGesturePrompt(
+  window: TimeRange,
+  particle?: FinalParticleInstance,
+): string {
   assertTimeRange(window, "window");
+
+  const particleContext =
+    particle === undefined
+      ? ""
+      : [
+          `The target particle ${particle.surface_form} (${particle.fp_pinyin}; canonical token ${particle.fp_token})`,
+          `spans ${particle.fp_start_ms}ms to ${particle.fp_end_ms}ms in utterance ${particle.utterance_id}.`,
+        ].join(" ");
 
   return [
     `Analyze the visible speaker between absolute source-video timestamps ${window.start_ms}ms and ${window.end_ms}ms.`,
+    particleContext,
     "Identify the clearest communicative gesture associated with the sentence-final particle.",
     `gesture_type must be one of: ${GESTURE_TYPES.join(", ")}.`,
     `gesture_region must be one of: ${GESTURE_REGIONS.join(", ")}.`,
@@ -53,6 +69,7 @@ export function parsePegasusGesture(
 ): PegasusGesture {
   assertTimeRange(analysisWindow, "analysisWindow");
   const value = parseObject(rawValue);
+  assertOnlySchemaProperties(value);
 
   if (!isGestureType(value.gesture_type)) {
     throw new TypeError("gesture_type is not in the controlled vocabulary");
@@ -64,6 +81,15 @@ export function parsePegasusGesture(
   assertConfidence(value.confidence, "confidence");
 
   if (value.gesture_type === "none") {
+    if (
+      value.gesture_region !== null ||
+      value.start_ms !== null ||
+      value.end_ms !== null
+    ) {
+      throw new TypeError(
+        "none gestures require null gesture_region, start_ms, and end_ms",
+      );
+    }
     return {
       gesture_type: "none",
       gesture_region: null,
@@ -99,6 +125,24 @@ export function parsePegasusGesture(
   };
 }
 
+function assertOnlySchemaProperties(value: Record<string, unknown>): void {
+  const allowedProperties = new Set([
+    "gesture_type",
+    "gesture_region",
+    "start_ms",
+    "end_ms",
+    "confidence",
+  ]);
+  const extraProperties = Object.keys(value).filter(
+    (property) => !allowedProperties.has(property),
+  );
+  if (extraProperties.length > 0) {
+    throw new TypeError(
+      `Pegasus response has unexpected properties: ${extraProperties.join(", ")}`,
+    );
+  }
+}
+
 function parseObject(rawValue: unknown): Record<string, unknown> {
   let value = rawValue;
 
@@ -130,4 +174,3 @@ function isGestureRegion(value: unknown): value is GestureRegion {
     (GESTURE_REGIONS as readonly string[]).includes(value)
   );
 }
-

@@ -134,3 +134,29 @@ uv run fp-track-a detect-fps \
 
 All canonical times are integer milliseconds. Frame numbers remain derived UI
 values (`round(ms / 1000 * fps)`) and are never persisted by Track A.
+
+## Track B foundation
+
+The provider-independent B1–B3 core lives in `lib/track-b`. It currently:
+
+- adapts Track A particle JSON while preserving each emitted `instance_id`
+- creates source-bounded analysis windows at FP start −2000ms through FP end
+  +2000ms
+- builds and strictly validates Pegasus structured-output prompts using the
+  controlled gesture taxonomy
+- turns MediaPipe landmark-velocity samples into motion intervals
+- keeps Pegasus gesture type/region while refining timing from the nearest
+  coherent MediaPipe interval
+- emits gesture presence and gesture boundaries as separate, unconfirmed draft
+  fields with explicit confidence and provenance
+- handles every FP instance independently for multi-particle videos
+
+The concrete TwelveLabs client and batched Python MediaPipe worker are the next
+integration step. The core uses small provider interfaces so API credentials
+and heavyweight CV dependencies are not required by its test suite.
+
+```bash
+npm install
+npm test
+npm run typecheck
+```

@@ -6,6 +6,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from fp_multimodel.vocab import PARTICLE_NORMALIZATION, TARGET_PARTICLES
+
 
 Milliseconds = Annotated[int, Field(ge=0)]
 Confidence = Annotated[float, Field(ge=0.0, le=1.0)]
@@ -83,8 +85,15 @@ class ParticleInstance(StrictModel):
 
     @model_validator(mode="after")
     def validate_time_range(self) -> "ParticleInstance":
-        if self.fp_end_ms < self.fp_start_ms:
-            raise ValueError("fp_end_ms must be greater than or equal to fp_start_ms")
+        if self.fp_end_ms <= self.fp_start_ms:
+            raise ValueError("fp_end_ms must be greater than fp_start_ms")
+        canonical_token = PARTICLE_NORMALIZATION.get(self.surface_form)
+        if canonical_token != self.fp_token:
+            raise ValueError(
+                "surface_form and fp_token must identify the same target particle"
+            )
+        if TARGET_PARTICLES.get(self.fp_token) != self.fp_pinyin:
+            raise ValueError("fp_pinyin does not match fp_token")
         return self
 
 
@@ -93,3 +102,10 @@ class ParticleDetectionResult(StrictModel):
 
     video_id: str = Field(min_length=1)
     particles: list[ParticleInstance]
+
+    @model_validator(mode="after")
+    def validate_unique_instance_ids(self) -> "ParticleDetectionResult":
+        instance_ids = [particle.instance_id for particle in self.particles]
+        if len(instance_ids) != len(set(instance_ids)):
+            raise ValueError("particle instance_ids must be unique")
+        return self

@@ -1,4 +1,4 @@
-import type { FinalParticleInstance, TimeRange } from "../types.ts";
+import type { FinalParticleTiming, TimeRange } from "../types.ts";
 import {
   assertMilliseconds,
   assertNonEmptyId,
@@ -12,7 +12,7 @@ export const TRACK_B_WINDOW_PADDING_MS = 2_000;
  * the later clip-generation window, which uses gesture/FP extrema plus 1500ms.
  */
 export function createGestureAnalysisWindow(
-  particle: FinalParticleInstance,
+  particle: FinalParticleTiming,
   videoDurationMs: number,
   paddingMs = TRACK_B_WINDOW_PADDING_MS,
 ): TimeRange {
@@ -33,4 +33,3 @@ export function createGestureAnalysisWindow(
     end_ms: Math.min(videoDurationMs, particle.fp_end_ms + paddingMs),
   };
 }
-

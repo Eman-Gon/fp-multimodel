@@ -24,24 +24,30 @@ export async function draftTrackBAnnotations(
   assertMilliseconds(request.video_duration_ms, "request.video_duration_ms");
 
   const seenInstanceIds = new Set<string>();
-  const drafts: GestureAnnotationDraft[] = [];
-
-  for (const particle of request.particle_instances) {
+  const workItems = request.particle_instances.map((particle) => {
     if (seenInstanceIds.has(particle.instance_id)) {
       throw new RangeError(`duplicate particle instance_id: ${particle.instance_id}`);
     }
     seenInstanceIds.add(particle.instance_id);
 
-    const window = createGestureAnalysisWindow(
+    return {
       particle,
-      request.video_duration_ms,
-    );
+      window: createGestureAnalysisWindow(
+        particle,
+        request.video_duration_ms,
+      ),
+    };
+  });
+
+  const drafts: GestureAnnotationDraft[] = [];
+  for (const { particle, window } of workItems) {
     const rawSemanticGesture =
       await dependencies.semanticAnalyzer.analyzeGesture({
         video_id: request.video_id,
         instance_id: particle.instance_id,
+        particle,
         window,
-        prompt: buildPegasusGesturePrompt(window),
+        prompt: buildPegasusGesturePrompt(window, particle),
         response_schema: PEGASUS_GESTURE_RESPONSE_SCHEMA,
       });
     const semanticGesture = parsePegasusGesture(rawSemanticGesture, window);
@@ -53,6 +59,7 @@ export async function draftTrackBAnnotations(
             video_id: request.video_id,
             instance_id: particle.instance_id,
             window,
+            semantic_gesture: semanticGesture,
           });
 
     drafts.push(
@@ -67,4 +74,3 @@ export async function draftTrackBAnnotations(
 
   return drafts;
 }
-

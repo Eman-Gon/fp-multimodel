@@ -23,7 +23,7 @@ def test_recognizes_each_target_token(token: str, pinyin: str) -> None:
     )
 
     assert particle is not None
-    assert particle.instance_id == "u1:fp:200"
+    assert particle.instance_id == "u1"
     assert particle.fp_token == token
     assert particle.fp_pinyin == pinyin
     assert particle.surface_form == token
@@ -38,6 +38,14 @@ def test_normalizes_traditional_ma_but_preserves_surface_form() -> None:
     assert particle is not None
     assert particle.fp_token == "吗"
     assert particle.fp_pinyin == "ma"
+    assert particle.surface_form == "嗎"
+
+
+def test_accepts_punctuation_attached_to_the_final_particle_label() -> None:
+    particle = detect_final_particle("u2", [interval("「嗎？」", 510, 590)])
+
+    assert particle is not None
+    assert particle.fp_token == "吗"
     assert particle.surface_form == "嗎"
 
 
@@ -122,4 +130,8 @@ def test_batch_helper_returns_one_match_per_matching_utterance() -> None:
     assert [(particle.utterance_id, particle.fp_token) for particle in result.particles] == [
         ("u1", "啦"),
         ("u3", "哦"),
+    ]
+    assert [particle.instance_id for particle in result.particles] == [
+        "video-1:u1",
+        "video-1:u3",
     ]

@@ -37,6 +37,21 @@ test("parses a schema-compliant detected gesture", () => {
   );
 });
 
+test("adds exact particle context when Track A metadata is available", () => {
+  const prompt = buildPegasusGesturePrompt(window, {
+    instance_id: "vid1:u1",
+    fp_token: "吗",
+    fp_pinyin: "ma",
+    surface_form: "嗎",
+    fp_start_ms: 3_200,
+    fp_end_ms: 3_450,
+    utterance_id: "u1",
+  });
+
+  assert.match(prompt, /target particle 嗎 \(ma; canonical token 吗\)/);
+  assert.match(prompt, /spans 3200ms to 3450ms/);
+});
+
 test("normalizes none to absent region and boundaries", () => {
   assert.deepEqual(
     parsePegasusGesture(
@@ -90,3 +105,35 @@ test("rejects unknown vocabulary and ambiguous timestamp coordinates", () => {
   );
 });
 
+test("enforces the strict none shape and rejects extra model fields", () => {
+  assert.throws(
+    () =>
+      parsePegasusGesture(
+        {
+          gesture_type: "none",
+          gesture_region: "face",
+          start_ms: 3_000,
+          end_ms: 3_200,
+          confidence: 0.8,
+        },
+        window,
+      ),
+    /require null/,
+  );
+
+  assert.throws(
+    () =>
+      parsePegasusGesture(
+        {
+          gesture_type: "head_nod",
+          gesture_region: "face",
+          start_ms: 3_000,
+          end_ms: 3_200,
+          confidence: 0.8,
+          explanation: "visible movement",
+        },
+        window,
+      ),
+    /unexpected properties/,
+  );
+});

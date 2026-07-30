@@ -16,8 +16,24 @@ test("drafts each particle in a multi-particle video under its own instance_id",
       video_id: "vid-03",
       video_duration_ms: 20_000,
       particle_instances: [
-        { instance_id: "fp-ne", fp_start_ms: 4_000, fp_end_ms: 4_200 },
-        { instance_id: "fp-ma", fp_start_ms: 10_000, fp_end_ms: 10_250 },
+        {
+          instance_id: "fp-ne",
+          fp_token: "呢",
+          fp_pinyin: "ne",
+          surface_form: "呢",
+          fp_start_ms: 4_000,
+          fp_end_ms: 4_200,
+          utterance_id: "u1",
+        },
+        {
+          instance_id: "fp-ma",
+          fp_token: "吗",
+          fp_pinyin: "ma",
+          surface_form: "嗎",
+          fp_start_ms: 10_000,
+          fp_end_ms: 10_250,
+          utterance_id: "u2",
+        },
       ],
     },
     {
@@ -56,24 +72,45 @@ test("drafts each particle in a multi-particle video under its own instance_id",
   );
   assert.equal(semanticCalls.length, 2);
   assert.equal(motionCalls.length, 1);
+  assert.equal(semanticCalls[0]!.particle.fp_token, "呢");
+  assert.equal(motionCalls[0]!.semantic_gesture.gesture_type, "head_tilt");
   assert.equal(drafts[0]!.gesture_boundaries.source, "mediapipe");
   assert.equal(drafts[1]!.gesture_boundaries.value, null);
 });
 
 test("rejects duplicate instance IDs before ambiguous graph links are emitted", async () => {
+  let semanticCallCount = 0;
+
   await assert.rejects(
     draftTrackBAnnotations(
       {
         video_id: "vid-03",
         video_duration_ms: 20_000,
         particle_instances: [
-          { instance_id: "fp-1", fp_start_ms: 4_000, fp_end_ms: 4_200 },
-          { instance_id: "fp-1", fp_start_ms: 6_000, fp_end_ms: 6_200 },
+          {
+            instance_id: "fp-1",
+            fp_token: "呢",
+            fp_pinyin: "ne",
+            surface_form: "呢",
+            fp_start_ms: 4_000,
+            fp_end_ms: 4_200,
+            utterance_id: "u1",
+          },
+          {
+            instance_id: "fp-1",
+            fp_token: "吗",
+            fp_pinyin: "ma",
+            surface_form: "吗",
+            fp_start_ms: 6_000,
+            fp_end_ms: 6_200,
+            utterance_id: "u2",
+          },
         ],
       },
       {
         semanticAnalyzer: {
           async analyzeGesture() {
+            semanticCallCount += 1;
             return {
               gesture_type: "none",
               gesture_region: null,
@@ -92,5 +129,5 @@ test("rejects duplicate instance IDs before ambiguous graph links are emitted", 
     ),
     /duplicate particle instance_id/,
   );
+  assert.equal(semanticCallCount, 0);
 });
-

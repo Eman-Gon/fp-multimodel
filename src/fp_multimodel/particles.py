@@ -40,9 +40,22 @@ def _is_ignorable_trailing_interval(surface_form: str) -> bool:
     return all(unicodedata.category(character).startswith("P") for character in stripped)
 
 
+def _particle_surface_form(surface_form: str) -> str:
+    """Remove non-spoken boundary punctuation from an aligned token label."""
+
+    characters = list(surface_form.strip())
+    while characters and unicodedata.category(characters[0]).startswith("P"):
+        characters.pop(0)
+    while characters and unicodedata.category(characters[-1]).startswith("P"):
+        characters.pop()
+    return "".join(characters)
+
+
 def detect_final_particle(
     utterance_id: str,
     intervals: Sequence[AlignedInterval],
+    *,
+    video_id: str | None = None,
 ) -> ParticleInstance | None:
     """Return the utterance-final target particle, if one is present.
 
@@ -63,13 +76,15 @@ def detect_final_particle(
     if final_interval is None:
         return None
 
-    surface_form = final_interval.surface_form.strip()
+    surface_form = _particle_surface_form(final_interval.surface_form)
     canonical_token = PARTICLE_NORMALIZATION.get(surface_form)
     if canonical_token is None:
         return None
 
     return ParticleInstance(
-        instance_id=f"{utterance_id}:fp:{final_interval.start_ms}",
+        instance_id=(
+            f"{video_id}:{utterance_id}" if video_id is not None else utterance_id
+        ),
         fp_token=canonical_token,
         fp_pinyin=TARGET_PARTICLES[canonical_token],
         surface_form=surface_form,
@@ -90,6 +105,7 @@ def detect_particles(
         particle = detect_final_particle(
             utterance_id=alignment.utterance_id,
             intervals=alignment.intervals,
+            video_id=video_id,
         )
         if particle is not None:
             particles.append(particle)

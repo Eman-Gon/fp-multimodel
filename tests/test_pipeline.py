@@ -61,7 +61,7 @@ def test_detection_offsets_segment_times_to_source_timeline(tmp_path: Path) -> N
 
     assert len(result.particles) == 1
     particle = result.particles[0]
-    assert particle.instance_id == "u1:fp:13900"
+    assert particle.instance_id == "vid1:u1"
     assert particle.surface_form == "嗎"
     assert particle.fp_token == "吗"
     assert particle.fp_start_ms == 13_900
