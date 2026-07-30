@@ -23,7 +23,7 @@ interface TimelineEditorProps {
   readonly currentSourceMs: number;
   readonly fps: number;
   readonly particleTiming: ReviewField<TimeRange>;
-  readonly gestureTiming: ReviewField<TimeRange>;
+  readonly gestureTiming: ReviewField<TimeRange | null>;
   readonly disabled: boolean;
   readonly onSeek: (sourceMilliseconds: number) => void;
   readonly onCommit: (
@@ -169,7 +169,7 @@ interface RangeTrackProps {
   readonly label: string;
   readonly className: string;
   readonly fieldName: "fp_timing" | "gesture_timing";
-  readonly field: ReviewField<TimeRange>;
+  readonly field: ReviewField<TimeRange | null>;
   readonly clipStartMs: number;
   readonly clipEndMs: number;
   readonly fps: number;
@@ -194,6 +194,55 @@ function RangeTrack({
   onActivate,
 }: RangeTrackProps) {
   const sourceRange = field.value ?? field.suggestion.value;
+  if (sourceRange === null) {
+    return (
+      <fieldset
+        className={`range-track ${className}`}
+        onFocusCapture={() => onActivate(fieldName)}
+        disabled
+      >
+        <legend>
+          <span>{label}</span>
+          <em>No boundary suggested</em>
+        </legend>
+        <div className="range-track__rail" />
+      </fieldset>
+    );
+  }
+  return (
+    <EditableRangeTrack
+      label={label}
+      className={className}
+      fieldName={fieldName}
+      field={field}
+      sourceRange={sourceRange}
+      clipStartMs={clipStartMs}
+      clipEndMs={clipEndMs}
+      fps={fps}
+      disabled={disabled}
+      onCommit={onCommit}
+      onActivate={onActivate}
+    />
+  );
+}
+
+interface EditableRangeTrackProps extends RangeTrackProps {
+  readonly sourceRange: TimeRange;
+}
+
+function EditableRangeTrack({
+  label,
+  className,
+  fieldName,
+  field,
+  sourceRange,
+  clipStartMs,
+  clipEndMs,
+  fps,
+  disabled,
+  onCommit,
+  onActivate,
+}: EditableRangeTrackProps) {
   const committedStart = sourceRange.start_ms - clipStartMs;
   const committedEnd = sourceRange.end_ms - clipStartMs;
   const durationMs = clipEndMs - clipStartMs;

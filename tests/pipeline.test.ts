@@ -431,3 +431,148 @@ test("direct analysis rejects a cross-video particle before provider calls", asy
   );
   assert.equal(providerCallCount, 0);
 });
+
+test("rejects zero-duration videos even when they contain no particles", async () => {
+  let providerCallCount = 0;
+
+  await assert.rejects(
+    draftTrackBAnnotations(
+      {
+        video_id: "vid1",
+        video_duration_ms: 0,
+        particle_instances: [],
+      },
+      {
+        semanticAnalyzer: {
+          async analyzeGesture() {
+            providerCallCount += 1;
+            return {};
+          },
+        },
+        motionAnalyzer: {
+          async detectMotion() {
+            providerCallCount += 1;
+            return [];
+          },
+        },
+      },
+    ),
+    /video_duration_ms must be positive/,
+  );
+  assert.equal(providerCallCount, 0);
+});
+
+test("batch analysis isolates malformed Pegasus output before MediaPipe", async () => {
+  const motionVideoIds: string[] = [];
+  const result = await draftTrackBBatchAnnotations(
+    {
+      project_id: "project-1",
+      videos: [
+        {
+          video_id: "vid1",
+          video_duration_ms: 10_000,
+          particle_instances: [
+            {
+              ...trackAProvenance,
+              instance_id: "vid1:u1",
+              fp_token: "吗",
+              fp_pinyin: "ma",
+              surface_form: "吗",
+              fp_start_ms: 1_000,
+              fp_end_ms: 1_200,
+              utterance_id: "u1",
+            },
+          ],
+        },
+        {
+          video_id: "vid2",
+          video_duration_ms: 10_000,
+          particle_instances: [
+            {
+              ...trackAProvenance,
+              instance_id: "vid2:u1",
+              fp_token: "吧",
+              fp_pinyin: "ba",
+              surface_form: "吧",
+              fp_start_ms: 2_000,
+              fp_end_ms: 2_200,
+              utterance_id: "u1",
+            },
+          ],
+        },
+      ],
+    },
+    {
+      semanticAnalyzer: {
+        async analyzeGesture(request) {
+          return request.video_id === "vid1"
+            ? { gesture_type: "head_nod" }
+            : {
+                gesture_type: "none",
+                gesture_region: null,
+                start_ms: null,
+                end_ms: null,
+                confidence: 0.7,
+              };
+        },
+      },
+      motionAnalyzer: {
+        async detectMotion(request) {
+          motionVideoIds.push(request.video_id);
+          return [];
+        },
+      },
+    },
+  );
+
+  assert.equal(result[0]?.status, "failed");
+  assert.deepEqual(result[0]?.annotations, []);
+  assert.match(
+    result[0]?.status === "failed" ? result[0].error_message : "",
+    /confidence must be a number/,
+  );
+  assert.equal(result[1]?.status, "completed");
+  assert.deepEqual(motionVideoIds, ["vid2"]);
+});
+
+test("rejects invalid MediaPipe intervals through the full pipeline", async () => {
+  await assert.rejects(
+    draftTrackBAnnotations(
+      {
+        video_id: "vid1",
+        video_duration_ms: 10_000,
+        particle_instances: [
+          {
+            ...trackAProvenance,
+            instance_id: "vid1:u1",
+            fp_token: "吗",
+            fp_pinyin: "ma",
+            surface_form: "吗",
+            fp_start_ms: 1_000,
+            fp_end_ms: 1_200,
+            utterance_id: "u1",
+          },
+        ],
+      },
+      {
+        semanticAnalyzer: {
+          async analyzeGesture() {
+            return {
+              gesture_type: "head_nod",
+              gesture_region: "face",
+              start_ms: 900,
+              end_ms: 1_300,
+              confidence: 0.75,
+            };
+          },
+        },
+        motionAnalyzer: {
+          async detectMotion() {
+            return [{ start_ms: 100, end_ms: 100, confidence: 0.5 }];
+          },
+        },
+      },
+    ),
+    /end_ms must be greater than motionIntervals\[0\]\.start_ms/,
+  );
+});

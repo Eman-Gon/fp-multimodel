@@ -205,6 +205,10 @@ The provider-independent B1–B3 core lives in `lib/track-b`. It currently:
   fields with explicit confidence and provenance
 - retains `video_id` plus original Pegasus and MediaPipe evidence on every
   reconciled draft
+- merges complete per-instance drafts into an existing Track C clip shell
+  without overwriting clip, transcript, participant, or meaning metadata
+- preserves literal no-gesture suggestions (`null` region and boundaries) and
+  the full original Track B evidence throughout later human review
 - handles every FP instance independently for multi-particle videos
 - analyzes multiple videos concurrently without mixing source timelines
 - returns completed or failed status per video so failed provider calls can be

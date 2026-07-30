@@ -290,7 +290,7 @@ export function FieldInspector({
           onSkip={skip}
         >
           <select
-            value={currentValue(particle.fields.gesture_region)}
+            value={currentValue(particle.fields.gesture_region) ?? ""}
             aria-label="Gesture region"
             onChange={(event) =>
               review(particleTarget("gesture_region"), {
@@ -299,6 +299,9 @@ export function FieldInspector({
               })
             }
           >
+            <option value="" disabled>
+              No region suggested
+            </option>
             {GESTURE_REGIONS.map((region) => (
               <option value={region} key={region}>
                 {humanize(region)}
@@ -613,8 +616,11 @@ function currentValue<T>(field: ReviewField<T>): T {
   return field.value ?? field.suggestion.value;
 }
 
-function formatRangeField(field: ReviewField<TimeRange>): string {
+function formatRangeField(field: ReviewField<TimeRange | null>): string {
   const range = currentValue(field);
+  if (range === null) {
+    return "No boundary suggested";
+  }
   return formatSourceRange(range.start_ms, range.end_ms);
 }
 

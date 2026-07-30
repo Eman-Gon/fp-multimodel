@@ -3,17 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { FileAudio2, LibraryBig, ListChecks } from "lucide-react";
-import { DEMO_CLIP_ID } from "@/lib/track-c/seed.ts";
+import { LibraryBig, ListChecks } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Queue", href: "/queue", Icon: ListChecks },
-  { label: "Explore", href: "/explore", Icon: LibraryBig },
-  {
-    label: "Review clip",
-    href: `/clips/${DEMO_CLIP_ID}`,
-    Icon: FileAudio2,
-  },
+  { label: "Reviewed", href: "/explore", Icon: LibraryBig },
 ] as const;
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
@@ -55,9 +49,12 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             );
           })}
         </div>
-        <p className="app-nav__mode">
+        <p
+          className="app-nav__mode"
+          title="Simulated annotations for product demonstration only"
+        >
           <span aria-hidden="true" />
-          Demo
+          Demo data
         </p>
       </nav>
       <div className="app-shell__content">{children}</div>

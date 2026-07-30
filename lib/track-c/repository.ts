@@ -93,10 +93,19 @@ function toListItem(clip: ClipDetail): ClipListItem {
   const speakerLabel =
     clip.participant_options.find(({ id }) => id === speakerId)?.label ??
     speakerId;
-  const confidences = listReviewUnits(clip)
+  const unresolved = listReviewUnits(clip)
     .filter(({ field }) => field.state === "suggested")
-    .map(({ field }) => field.suggestion.confidence)
-    .filter((confidence): confidence is number => confidence !== null);
+    .flatMap(({ field, label }) =>
+      field.suggestion.confidence === null
+        ? []
+        : [{ confidence: field.suggestion.confidence, label }],
+    );
+  let lowest: (typeof unresolved)[number] | null = null;
+  for (const candidate of unresolved) {
+    if (lowest === null || candidate.confidence < lowest.confidence) {
+      lowest = candidate;
+    }
+  }
 
   return {
     id: clip.clip.id,
@@ -114,8 +123,8 @@ function toListItem(clip: ClipDetail): ClipListItem {
     speaker_id: speakerId,
     speaker_label: speakerLabel,
     status: clip.clip.status,
-    lowest_confidence:
-      confidences.length === 0 ? null : Math.min(...confidences),
+    lowest_confidence: lowest?.confidence ?? null,
+    lowest_confidence_label: lowest?.label ?? null,
     duration_ms: clip.clip.end_ms - clip.clip.start_ms,
   };
 }

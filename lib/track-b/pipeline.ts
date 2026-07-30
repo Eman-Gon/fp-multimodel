@@ -25,6 +25,9 @@ export async function draftTrackBAnnotations(
 ): Promise<readonly GestureAnnotationDraft[]> {
   assertNonEmptyId(request.video_id, "request.video_id");
   assertMilliseconds(request.video_duration_ms, "request.video_duration_ms");
+  if (request.video_duration_ms <= 0) {
+    throw new RangeError("request.video_duration_ms must be positive");
+  }
 
   const seenInstanceIds = new Set<string>();
   const seenUtteranceIds = new Set<string>();

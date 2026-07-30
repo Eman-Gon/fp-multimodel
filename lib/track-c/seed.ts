@@ -53,16 +53,16 @@ export function createDemoClip(): ClipDetail {
   };
 
   return {
-    schema_version: 2,
+    schema_version: 3,
     version: 1,
     demo_fixture: true,
     fixture_note:
-      "Seeded review fixture — suggestions are simulated and are not research findings.",
+      "Seeded demo fixture — media, suggestions, and confidence values are simulated and are not research evidence.",
     clip: {
       id: DEMO_CLIP_ID,
       name: "vid03_spkA_spkB_ma_014310",
-      start_ms: 12_000,
-      end_ms: 19_200,
+      start_ms: 12_340,
+      end_ms: 16_400,
       status: "in_review",
     },
     video: {
@@ -103,21 +103,21 @@ export function createDemoClip(): ClipDetail {
       speaker_id: confirmed("spkA", "diarization", 0.94),
       addressee_id: suggested("spkB", "heuristic", 0.61),
       fp_count: confirmed(1, "derived", 1),
-      sentence_type: suggested("polar_question", "openai", 0.88),
-      tone_contour: suggested("rising", "parselmouth", 0.73),
-      discourse_context: suggested(
+      sentence_type: confirmed("polar_question", "openai", 0.88),
+      tone_contour: confirmed("rising", "parselmouth", 0.73),
+      discourse_context: confirmed(
         "Speaker A checks whether Speaker B has already eaten during a conversation.",
         "openai",
         0.66,
       ),
       sentence_text: confirmed("你不是已经吃过了吗", "fixture", 1),
-      clauses: suggested(["你不是已经吃过了吗"], "openai", 0.72),
+      clauses: confirmed(["你不是已经吃过了吗"], "openai", 0.72),
       communicative_function: suggested(
         "confirmation_seeking",
         "openai",
         0.68,
       ),
-      meaning_explanation: suggested(
+      meaning_explanation: confirmed(
         "The polar question, rising contour, final 吗, and head movement jointly suggest a request for confirmation.",
         "openai",
         0.64,
@@ -128,13 +128,14 @@ export function createDemoClip(): ClipDetail {
         instance_id: "vid03:u17",
         surface_form: "嗎",
         fp_pinyin: "ma",
+        original_track_b_suggestion: null,
         fields: {
           fp_token: confirmed("吗", "mfa", 0.99),
           fp_timing: suggested(fpTiming, "mfa", 0.82),
           gesture_present: confirmed(true, "pegasus", 0.91),
           gesture_type: suggested("head_nod", "pegasus", 0.87),
           gesture_region: confirmed("face", "pegasus", 0.9),
-          gesture_timing: suggested(
+          gesture_timing: confirmed(
             gestureTiming,
             "mediapipe",
             0.76,
@@ -151,29 +152,29 @@ export function createSecondDemoClip(): ClipDetail {
   second.version = 1;
   second.clip.id = SECOND_DEMO_CLIP_ID;
   second.clip.name = SECOND_DEMO_CLIP_ID;
-  second.clip.start_ms = 7_200;
-  second.clip.end_ms = 12_900;
+  second.clip.start_ms = 6_620;
+  second.clip.end_ms = 10_520;
   second.video.id = "vid04";
   second.video.duration_ms = 146_000;
   second.utterance.id = "u09";
   second.utterance.text = "我们先休息一下吧";
   second.fields.speaker_id = confirmed("spkB", "diarization", 0.91);
   second.fields.addressee_id = suggested("spkA", "heuristic", 0.58);
-  second.fields.sentence_type = suggested("imperative", "openai", 0.81);
-  second.fields.tone_contour = suggested("falling", "parselmouth", 0.69);
-  second.fields.discourse_context = suggested(
+  second.fields.sentence_type = confirmed("imperative", "openai", 0.81);
+  second.fields.tone_contour = confirmed("falling", "parselmouth", 0.69);
+  second.fields.discourse_context = confirmed(
     "Speaker B proposes a short break to Speaker A during a shared activity.",
     "openai",
     0.62,
   );
   second.fields.sentence_text = confirmed("我们先休息一下吧", "fixture", 1);
-  second.fields.clauses = suggested(["我们先休息一下吧"], "openai", 0.7);
+  second.fields.clauses = confirmed(["我们先休息一下吧"], "openai", 0.7);
   second.fields.communicative_function = suggested(
     "softening",
     "openai",
     0.71,
   );
-  second.fields.meaning_explanation = suggested(
+  second.fields.meaning_explanation = confirmed(
     "The imperative context, falling contour, final 吧, and open-palm gesture soften the proposal.",
     "openai",
     0.67,
@@ -191,7 +192,7 @@ export function createSecondDemoClip(): ClipDetail {
   );
   particle.fields.gesture_type = suggested("open_palm", "pegasus", 0.79);
   particle.fields.gesture_region = confirmed("body", "pegasus", 0.86);
-  particle.fields.gesture_timing = suggested(
+  particle.fields.gesture_timing = confirmed(
     { start_ms: 8_120, end_ms: 9_020 },
     "mediapipe",
     0.71,

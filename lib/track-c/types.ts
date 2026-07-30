@@ -7,7 +7,7 @@ import type {
   SentenceType,
   ToneContour,
 } from "../vocab.ts";
-import type { TimeRange } from "../types.ts";
+import type { GestureAnnotationDraft, TimeRange } from "../types.ts";
 
 export type SuggestionSource =
   | "asr"
@@ -73,19 +73,25 @@ export interface ParticleReviewFields {
   fp_timing: ReviewField<TimeRange>;
   gesture_present: ReviewField<boolean>;
   gesture_type: ReviewField<GestureType>;
-  gesture_region: ReviewField<GestureRegion>;
-  gesture_timing: ReviewField<TimeRange>;
+  gesture_region: ReviewField<GestureRegion | null>;
+  gesture_timing: ReviewField<TimeRange | null>;
 }
 
 export interface ParticleReview {
   readonly instance_id: string;
   readonly surface_form: string;
   fp_pinyin: string;
+  /**
+   * The complete, immutable Track B input to review. Keeping the full draft
+   * preserves the original nullable suggestions and Pegasus/MediaPipe
+   * disagreement evidence after a reviewer accepts or edits individual fields.
+   */
+  readonly original_track_b_suggestion: GestureAnnotationDraft | null;
   readonly fields: ParticleReviewFields;
 }
 
 export interface ClipDetail {
-  readonly schema_version: 2;
+  readonly schema_version: 3;
   version: number;
   readonly demo_fixture: boolean;
   readonly fixture_note: string;
@@ -125,6 +131,7 @@ export interface ClipListItem {
   readonly speaker_label: string;
   readonly status: ClipStatus;
   readonly lowest_confidence: number | null;
+  readonly lowest_confidence_label: string | null;
   readonly duration_ms: number;
 }
 
