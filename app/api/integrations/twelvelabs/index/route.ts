@@ -9,6 +9,7 @@ import type {
   TwelveLabsIndexStatusRequest,
   TwelveLabsUploadUrlRequest,
 } from "@/lib/twelvelabs/contracts.ts";
+import { TWELVELABS_MAX_DIRECT_UPLOAD_BYTES } from "@/lib/twelvelabs/contracts.ts";
 import { TwelveLabsError } from "@/lib/twelvelabs/errors.ts";
 import {
   createTwelveLabsClient,
@@ -22,8 +23,6 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const MAX_DIRECT_UPLOAD_BYTES = 200 * 1024 * 1024;
 
 interface UploadFileCommand {
   readonly action: "upload";
@@ -226,7 +225,10 @@ async function parseMultipartCommand(
       { video_id: videoId },
     );
   }
-  if (file.size === 0 || file.size > MAX_DIRECT_UPLOAD_BYTES) {
+  if (
+    file.size === 0 ||
+    file.size > TWELVELABS_MAX_DIRECT_UPLOAD_BYTES
+  ) {
     return invalidRequestResponse(
       "video_file must be between 1 byte and 200 MB.",
       { video_id: videoId },

@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, FormEvent } from "react";
+import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
@@ -12,9 +12,11 @@ import {
   LoaderCircle,
   RefreshCw,
   Sparkles,
+  Upload,
   Video,
 } from "lucide-react";
 import { createGestureAnalysisWindow } from "@/lib/track-b/analysis-window.ts";
+import { TWELVELABS_MAX_DIRECT_UPLOAD_BYTES } from "@/lib/twelvelabs/contracts.ts";
 import type { FinalParticleInstance, TimeRange } from "@/lib/types.ts";
 import { humanizeCode } from "@/lib/track-c/display.ts";
 import {
@@ -77,6 +79,8 @@ export interface TwelveLabsIntegrationViewProps {
   readonly instanceId: string;
   readonly indexId: string;
   readonly videoUrl: string;
+  readonly videoFile: File | null;
+  readonly fileInputResetKey: number;
   readonly windowDraft: AnalysisWindowDraft;
   readonly connectionState: ConnectionViewState;
   readonly indexState: IndexViewState;
@@ -85,6 +89,7 @@ export interface TwelveLabsIntegrationViewProps {
   readonly onInstanceIdChange: (instanceId: string) => void;
   readonly onIndexIdChange: (indexId: string) => void;
   readonly onVideoUrlChange: (videoUrl: string) => void;
+  readonly onVideoFileChange: (videoFile: File | null) => void;
   readonly onWindowValueChange: (
     field: keyof AnalysisWindowDraft,
     value: number | null,
@@ -115,6 +120,8 @@ export function TwelveLabsIntegration({
       ? initialOption.source_url
       : "",
   );
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [fileInputResetKey, setFileInputResetKey] = useState(0);
   const [windowDraft, setWindowDraft] = useState<AnalysisWindowDraft>(
     initialOption === undefined
       ? EMPTY_WINDOW_DRAFT
@@ -180,7 +187,7 @@ export function TwelveLabsIntegration({
     );
     setInstanceId(knownVideo?.instance_id ?? "");
     setVideoUrl(
-      knownVideo?.source_url.startsWith("https://")
+      videoFile === null && knownVideo?.source_url.startsWith("https://")
         ? knownVideo.source_url
         : "",
     );
@@ -222,19 +229,32 @@ export function TwelveLabsIntegration({
 
   const handleVideoUrlChange = (nextVideoUrl: string) => {
     setVideoUrl(nextVideoUrl);
+    if (nextVideoUrl.trim().length > 0 && videoFile !== null) {
+      setVideoFile(null);
+      setFileInputResetKey((current) => current + 1);
+    }
+    resetOperations();
+  };
+
+  const handleVideoFileChange = (nextVideoFile: File | null) => {
+    setVideoFile(nextVideoFile);
+    if (nextVideoFile !== null) {
+      setVideoUrl("");
+    }
     resetOperations();
   };
 
   const handleStartIndexing = async () => {
-    const knownVideo = videoOptions.some(
-      ({ video_id: optionVideoId }) => optionVideoId === videoId.trim(),
-    );
+    const fileError = videoFileValidationMessage(videoFile);
+    const hasUploadSource =
+      videoFile !== null
+        ? fileError === null
+        : videoUrl.trim().length > 0;
     if (
       connectionState.status !== "configured" ||
-      !knownVideo ||
       videoId.trim().length === 0 ||
       indexId.trim().length === 0 ||
-      videoUrl.trim().length === 0 ||
+      !hasUploadSource ||
       indexState.status === "processing"
     ) {
       return;
@@ -246,11 +266,19 @@ export function TwelveLabsIntegration({
     setAnalysisState({ status: "idle" });
 
     try {
-      const result = await startTwelveLabsIndex({
-        video_id: videoId.trim(),
-        index_id: indexId.trim(),
-        video_url: videoUrl.trim(),
-      });
+      const result =
+        videoFile === null
+          ? await startTwelveLabsIndex({
+              video_id: videoId.trim(),
+              index_id: indexId.trim(),
+              video_url: videoUrl.trim(),
+            })
+          : await startTwelveLabsIndex({
+              video_id: videoId.trim(),
+              index_id: indexId.trim(),
+              video_file: videoFile,
+              filename: videoFile.name,
+            });
       if (requestId !== indexRequest.current) {
         return;
       }
@@ -364,6 +392,8 @@ export function TwelveLabsIntegration({
       instanceId={instanceId}
       indexId={indexId}
       videoUrl={videoUrl}
+      videoFile={videoFile}
+      fileInputResetKey={fileInputResetKey}
       windowDraft={windowDraft}
       connectionState={connectionState}
       indexState={indexState}
@@ -372,6 +402,7 @@ export function TwelveLabsIntegration({
       onInstanceIdChange={handleInstanceIdChange}
       onIndexIdChange={handleIndexIdChange}
       onVideoUrlChange={handleVideoUrlChange}
+      onVideoFileChange={handleVideoFileChange}
       onWindowValueChange={handleWindowValueChange}
       onCheckConnection={() => void checkConnection()}
       onStartIndexing={() => void handleStartIndexing()}
@@ -386,6 +417,8 @@ export function TwelveLabsIntegrationView({
   instanceId,
   indexId,
   videoUrl,
+  videoFile,
+  fileInputResetKey,
   windowDraft,
   connectionState,
   indexState,
@@ -394,6 +427,7 @@ export function TwelveLabsIntegrationView({
   onInstanceIdChange,
   onIndexIdChange,
   onVideoUrlChange,
+  onVideoFileChange,
   onWindowValueChange,
   onCheckConnection,
   onStartIndexing,
@@ -415,12 +449,16 @@ export function TwelveLabsIntegrationView({
   const knownVideo = videoOptions.some(
     ({ video_id: optionVideoId }) => optionVideoId === videoId.trim(),
   );
+  const fileError = videoFileValidationMessage(videoFile);
+  const hasUploadSource =
+    videoFile !== null
+      ? fileError === null
+      : videoUrl.trim().length > 0;
   const canIndex =
     connectionState.status === "configured" &&
-    knownVideo &&
     videoId.trim().length > 0 &&
     indexId.trim().length > 0 &&
-    videoUrl.trim().length > 0 &&
+    hasUploadSource &&
     indexState.status !== "processing";
   const canAnalyze =
     connectionState.status === "configured" &&
@@ -482,7 +520,7 @@ export function TwelveLabsIntegrationView({
         >
           <PanelHeading
             number="2"
-            title="Index video"
+            title="Upload & index video"
             id="twelvelabs-index-title"
           />
           <form
@@ -504,8 +542,8 @@ export function TwelveLabsIntegrationView({
                 spellCheck={false}
               />
               <small id="twelvelabs-video-id-help">
-                Choose a registered source video with retained Track A
-                particle suggestions.
+                Enter a stable ID for this source video. Registered IDs also
+                unlock particle analysis after indexing.
               </small>
             </div>
             <datalist id="twelvelabs-video-options">
@@ -534,8 +572,54 @@ export function TwelveLabsIntegrationView({
                 Use the destination index ID from your TwelveLabs account.
               </small>
             </label>
+            <label
+              className="twelvelabs-field"
+              htmlFor="twelvelabs-video-file"
+            >
+              <span>Local video file</span>
+              <input
+                key={fileInputResetKey}
+                id="twelvelabs-video-file"
+                name="video_file"
+                type="file"
+                accept="video/*,.mp4,.mov,.m4v,.webm"
+                aria-describedby={
+                  fileError === null
+                    ? "twelvelabs-video-file-help"
+                    : "twelvelabs-video-file-help twelvelabs-video-file-error"
+                }
+                aria-invalid={fileError === null ? undefined : true}
+                onChange={(event) =>
+                  onVideoFileChange(
+                    event.currentTarget.files?.item(0) ?? null,
+                  )
+                }
+              />
+              {videoFile === null ? null : (
+                <output
+                  className="twelvelabs-file-summary"
+                  aria-live="polite"
+                >
+                  <strong>{videoFile.name}</strong>
+                  <span>{formatFileSize(videoFile.size)}</span>
+                </output>
+              )}
+              <small id="twelvelabs-video-file-help">
+                Choose a video up to 200 MB. It uploads only after you click
+                the button below.
+              </small>
+              {fileError === null ? null : (
+                <small
+                  id="twelvelabs-video-file-error"
+                  className="twelvelabs-field-error"
+                  role="alert"
+                >
+                  {fileError}
+                </small>
+              )}
+            </label>
             <label className="twelvelabs-field" htmlFor="twelvelabs-video-url">
-              <span>Public video URL</span>
+              <span>Or use a public video URL</span>
               <input
                 id="twelvelabs-video-url"
                 name="video_url"
@@ -562,18 +646,23 @@ export function TwelveLabsIntegrationView({
             >
               {indexState.status === "processing" ? (
                 <LoaderCircle className="is-spinning" aria-hidden="true" />
+              ) : videoFile !== null ? (
+                <Upload aria-hidden="true" />
               ) : (
                 <Video aria-hidden="true" />
               )}
               {indexState.status === "processing"
-                ? "Indexing…"
-                : "Start indexing"}
+                ? "Uploading & indexing…"
+                : videoFile === null
+                  ? "Index public URL"
+                  : "Upload & index file"}
             </button>
           </form>
           <IndexStatus
             state={indexState}
             videoId={videoId}
             connectionState={connectionState}
+            analysisReady={knownVideo}
           />
         </section>
 
@@ -587,6 +676,16 @@ export function TwelveLabsIntegrationView({
             title="Analyze gestures"
             id="twelvelabs-analyze-title"
           />
+          {!knownVideo && videoId.trim().length > 0 ? (
+            <div className="twelvelabs-ingest-note" role="note">
+              <strong>Upload and indexing are available for this video.</strong>
+              <p>
+                Gesture analysis stays locked until this exact video has a
+                reviewed transcript and retained particle timing. Demo timing
+                is never applied to a new upload.
+              </p>
+            </div>
+          ) : null}
           <form onSubmit={(event) => submit(event, onAnalyze)}>
             <label
               className="twelvelabs-field"
@@ -842,10 +941,12 @@ function IndexStatus({
   state,
   videoId,
   connectionState,
+  analysisReady,
 }: Readonly<{
   state: IndexViewState;
   videoId: string;
   connectionState: ConnectionViewState;
+  analysisReady: boolean;
 }>) {
   if (state.status === "processing") {
     return (
@@ -860,9 +961,32 @@ function IndexStatus({
     return (
       <OperationStatus
         variant="ready"
-        title="Ready for analysis"
-        message={`The server reports that video_id ${videoId.trim()} is indexed.`}
-      />
+        title={
+          analysisReady
+            ? "Ready for analysis"
+            : "Upload and indexing complete"
+        }
+        message={
+          analysisReady
+            ? `The server reports that video_id ${videoId.trim()} is indexed.`
+            : `The server indexed video_id ${videoId.trim()}. Register its transcript and particle timing to unlock analysis.`
+        }
+      >
+        <dl className="twelvelabs-operation__details">
+          <div>
+            <dt>Asset ID</dt>
+            <dd>{state.result.asset_id}</dd>
+          </div>
+          <div>
+            <dt>Indexed asset ID</dt>
+            <dd>{state.result.indexed_asset_id}</dd>
+          </div>
+          <div>
+            <dt>Index ID</dt>
+            <dd>{state.result.index_id}</dd>
+          </div>
+        </dl>
+      </OperationStatus>
     );
   }
   if (state.status === "failed") {
@@ -892,10 +1016,12 @@ function OperationStatus({
   variant,
   title,
   message,
+  children,
 }: Readonly<{
   variant: "empty" | "processing" | "ready" | "failed";
   title: string;
   message: string;
+  children?: ReactNode;
 }>) {
   const Icon =
     variant === "processing"
@@ -918,6 +1044,7 @@ function OperationStatus({
       <div>
         <strong>{title}</strong>
         <p>{message}</p>
+        {children}
       </div>
     </div>
   );

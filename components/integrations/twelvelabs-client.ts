@@ -11,6 +11,7 @@ import type {
 import {
   TWELVELABS_ANALYZE_ENDPOINT,
   TWELVELABS_INDEX_ENDPOINT,
+  TWELVELABS_MAX_DIRECT_UPLOAD_BYTES,
   TWELVELABS_STATUS_ENDPOINT,
 } from "@/lib/twelvelabs/contracts.ts";
 import type {
@@ -46,6 +47,21 @@ export interface TwelveLabsIndexWorkflowOptions {
   readonly poll_interval_ms?: number;
   readonly max_poll_attempts?: number;
 }
+
+export interface TwelveLabsFileIndexWorkflowRequest {
+  readonly video_id: string;
+  readonly index_id: string;
+  readonly video_file: File;
+  readonly filename?: string;
+}
+
+type TwelveLabsIndexResponseContext =
+  | TwelveLabsIndexRequest
+  | {
+      readonly action: "upload";
+      readonly video_id: string;
+      readonly index_id: string;
+    };
 
 type Fetcher = typeof fetch;
 
@@ -119,13 +135,53 @@ export async function sendTwelveLabsIndexCommand(
   return parseIndexPayload(payload, request, response.status);
 }
 
+export async function sendTwelveLabsFileUploadCommand(
+  request: TwelveLabsFileIndexWorkflowRequest,
+  fetcher: Fetcher = fetch,
+): Promise<TwelveLabsIndexData> {
+  validateFileUploadRequest(request);
+  const form = new FormData();
+  form.set("action", "upload");
+  form.set("video_id", request.video_id.trim());
+  form.set("index_id", request.index_id.trim());
+  form.set(
+    "video_file",
+    request.video_file,
+    request.filename?.trim() || request.video_file.name,
+  );
+  const response = await fetcher(TWELVELABS_INDEX_ENDPOINT, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: form,
+  });
+  const payload = await readResponsePayload(response);
+  if (!response.ok) {
+    throw responseError(
+      response,
+      payload,
+      "The server could not upload this video file.",
+    );
+  }
+  return parseIndexPayload(
+    payload,
+    {
+      action: "upload",
+      video_id: request.video_id.trim(),
+      index_id: request.index_id.trim(),
+    },
+    response.status,
+  );
+}
+
 /**
  * Runs the route's explicit upload → asset poll → index → index poll state
  * machine. Provider identifiers are retained between calls and never replace
  * the research video's stable video_id.
  */
 export async function startTwelveLabsIndex(
-  request: TwelveLabsIndexWorkflowRequest,
+  request:
+    | TwelveLabsIndexWorkflowRequest
+    | TwelveLabsFileIndexWorkflowRequest,
   fetcher: Fetcher = fetch,
   options: TwelveLabsIndexWorkflowOptions = {},
 ): Promise<TwelveLabsIndexResult> {
@@ -133,18 +189,21 @@ export async function startTwelveLabsIndex(
   const maxPollAttempts = options.max_poll_attempts ?? 150;
   assertPollingOptions(pollIntervalMs, maxPollAttempts);
 
-  let upload = await sendTwelveLabsIndexCommand(
-    {
-      action: "upload",
-      video_id: request.video_id,
-      index_id: request.index_id,
-      video_url: request.video_url,
-      ...(request.filename === undefined
-        ? {}
-        : { filename: request.filename }),
-    },
-    fetcher,
-  );
+  let upload =
+    "video_file" in request
+      ? await sendTwelveLabsFileUploadCommand(request, fetcher)
+      : await sendTwelveLabsIndexCommand(
+          {
+            action: "upload",
+            video_id: request.video_id,
+            index_id: request.index_id,
+            video_url: request.video_url,
+            ...(request.filename === undefined
+              ? {}
+              : { filename: request.filename }),
+          },
+          fetcher,
+        );
   upload = await pollUntilSettled(
     upload,
     () =>
@@ -253,7 +312,7 @@ export function parseConnectionStatusPayload(
 
 export function parseIndexPayload(
   payload: unknown,
-  request: TwelveLabsIndexRequest,
+  request: TwelveLabsIndexResponseContext,
   responseStatus = 200,
 ): TwelveLabsIndexData {
   const data = unwrapData(payload);
@@ -611,6 +670,31 @@ function validateIndexRequest(request: TwelveLabsIndexRequest): void {
     request.indexed_asset_id !== undefined
   ) {
     requireNonEmpty(request.indexed_asset_id, "indexed_asset_id");
+  }
+}
+
+function validateFileUploadRequest(
+  request: TwelveLabsFileIndexWorkflowRequest,
+): void {
+  requireNonEmpty(request.video_id, "video_id");
+  requireNonEmpty(request.index_id, "index_id");
+  if (
+    request.video_file.size < 1 ||
+    request.video_file.size > TWELVELABS_MAX_DIRECT_UPLOAD_BYTES
+  ) {
+    throw new TwelveLabsUiRequestError(
+      "video_file must be between 1 byte and 200 MB.",
+      { video_id: request.video_id },
+    );
+  }
+  if (
+    request.filename !== undefined &&
+    request.filename.trim().length === 0
+  ) {
+    throw new TwelveLabsUiRequestError(
+      "filename must not be empty.",
+      { video_id: request.video_id },
+    );
   }
 }
 

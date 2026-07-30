@@ -10,6 +10,7 @@ export const TWELVELABS_INDEX_ENDPOINT =
   "/api/integrations/twelvelabs/index";
 export const TWELVELABS_ANALYZE_ENDPOINT =
   "/api/integrations/twelvelabs/analyze";
+export const TWELVELABS_MAX_DIRECT_UPLOAD_BYTES = 200 * 1024 * 1024;
 
 export interface ApiDataResponse<T> {
   readonly data: T;
