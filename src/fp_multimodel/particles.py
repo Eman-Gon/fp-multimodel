@@ -63,12 +63,13 @@ def detect_final_particle(
     if final_interval is None:
         return None
 
-    surface_form = final_interval.surface_form
-    canonical_token = PARTICLE_NORMALIZATION.get(surface_form.strip())
+    surface_form = final_interval.surface_form.strip()
+    canonical_token = PARTICLE_NORMALIZATION.get(surface_form)
     if canonical_token is None:
         return None
 
     return ParticleInstance(
+        instance_id=f"{utterance_id}:fp:{final_interval.start_ms}",
         fp_token=canonical_token,
         fp_pinyin=TARGET_PARTICLES[canonical_token],
         surface_form=surface_form,

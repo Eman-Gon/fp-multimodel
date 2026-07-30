@@ -1,0 +1,15 @@
+{
+  "video_id": "vid03",
+  "utterances": [
+    {
+      "id": "u1",
+      "start_ms": 12400,
+      "end_ms": 15100,
+      "text": "你吃饭了吗",
+      "speaker": "spkA",
+      "confidence": 0.82,
+      "transcript_confirmed": false
+    }
+  ]
+}
+

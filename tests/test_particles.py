@@ -23,6 +23,7 @@ def test_recognizes_each_target_token(token: str, pinyin: str) -> None:
     )
 
     assert particle is not None
+    assert particle.instance_id == "u1:fp:200"
     assert particle.fp_token == token
     assert particle.fp_pinyin == pinyin
     assert particle.surface_form == token

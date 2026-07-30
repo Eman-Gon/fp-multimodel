@@ -73,6 +73,7 @@ class UtteranceAlignment(StrictModel):
 class ParticleInstance(StrictModel):
     """One utterance-final target particle with canonical millisecond timing."""
 
+    instance_id: str = Field(min_length=1)
     fp_token: str
     fp_pinyin: str
     surface_form: str
@@ -92,4 +93,3 @@ class ParticleDetectionResult(StrictModel):
 
     video_id: str = Field(min_length=1)
     particles: list[ParticleInstance]
-
