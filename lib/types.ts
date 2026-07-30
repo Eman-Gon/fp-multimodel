@@ -35,9 +35,35 @@ export interface FinalParticleInstance extends FinalParticleTiming {
 
 export type TrackAParticle = FinalParticleInstance;
 
+export interface TrackAExtendedParticleCandidate {
+  readonly instance_id: string;
+  readonly normalized_candidate: string;
+  readonly surface_form: string;
+  readonly start_ms: number;
+  readonly end_ms: number;
+  readonly utterance_id: string;
+  readonly source: "mfa_rule";
+  readonly confidence: number | null;
+  readonly confirmed: false;
+  readonly review_required: true;
+}
+
+export interface TrackAProcessingProvenance {
+  readonly duration_ms: number;
+  readonly fps: 30;
+  readonly transcript_sha256: string;
+  readonly source_audio_sha256: string;
+  readonly normalized_video_sha256: string;
+  readonly dictionary_model: string;
+  readonly acoustic_model: string;
+}
+
 export interface TrackAParticleDetectionResult {
+  readonly schema_version: 1;
   readonly video_id: string;
+  readonly provenance: TrackAProcessingProvenance;
   readonly particles: readonly TrackAParticle[];
+  readonly candidates: readonly TrackAExtendedParticleCandidate[];
 }
 
 export type AiSource = "pegasus" | "mediapipe";
@@ -121,6 +147,7 @@ export interface TrackBHandoff {
   readonly particles_by_instance_id: Readonly<
     Record<string, TrackAParticle>
   >;
+  readonly candidates_for_review: readonly TrackAExtendedParticleCandidate[];
 }
 
 export interface SemanticGestureRequest {

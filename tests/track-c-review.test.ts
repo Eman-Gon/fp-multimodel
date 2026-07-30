@@ -227,6 +227,12 @@ test("demo corpus contains clips from multiple independent videos", () => {
     ),
     ["吗", "吧"],
   );
+  assert.deepEqual(
+    clips.map(({ particle_instances }) =>
+      particle_instances[0]?.instance_id,
+    ),
+    ["vid03:u17", "vid04:u09"],
+  );
 });
 
 test("extended candidates and external source remain explicitly unverified", () => {

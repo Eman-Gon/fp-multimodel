@@ -238,6 +238,7 @@ class ExtendedParticleCandidate(StrictModel):
     end_ms: Milliseconds
     utterance_id: str = Field(min_length=1)
     source: Literal["mfa_rule"] = "mfa_rule"
+    confidence: Confidence | None = None
     confirmed: Literal[False] = False
     review_required: Literal[True] = True
 
@@ -256,10 +257,24 @@ class ExtendedParticleCandidate(StrictModel):
         return self
 
 
+class ParticleDetectionProvenance(StrictModel):
+    """Versioned media, transcript, and MFA identity carried across Track A."""
+
+    duration_ms: Annotated[int, Field(gt=0)]
+    fps: Literal[30]
+    transcript_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_audio_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    normalized_video_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    dictionary_model: str = Field(min_length=1)
+    acoustic_model: str = Field(min_length=1)
+
+
 class ParticleDetectionResult(StrictModel):
     """Serializable result of scanning one video's reviewed alignments."""
 
+    schema_version: Literal[1] = 1
     video_id: str = Field(min_length=1)
+    provenance: ParticleDetectionProvenance | None = None
     particles: list[ParticleInstance]
     candidates: list[ExtendedParticleCandidate] = Field(default_factory=list)
 

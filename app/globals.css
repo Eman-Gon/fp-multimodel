@@ -1331,7 +1331,7 @@ kbd {
 }
 
 .field-inspector__body--read-only {
-  opacity: 0.72;
+  opacity: 1;
 }
 
 .field-inspector__body {
@@ -2372,7 +2372,7 @@ kbd {
   }
 
   .workspace-bar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) 104px;
   }
 
   .workspace-bar__brand {
@@ -2382,6 +2382,12 @@ kbd {
   .workspace-bar__sequence {
     justify-self: start;
     padding-left: 8px;
+  }
+
+  .workspace-bar__confirm {
+    width: 96px;
+    padding-inline: 7px;
+    white-space: nowrap;
   }
 
   .video-controls {

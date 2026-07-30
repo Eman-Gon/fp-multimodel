@@ -11,6 +11,7 @@ from fp_multimodel.models import (
     AlignedInterval,
     ExtendedParticleCandidate,
     ParticleDetectionResult,
+    ParticleDetectionProvenance,
     ParticleInstance,
     Transcript,
     Utterance,
@@ -248,7 +249,21 @@ def detect_from_mfa_output(
         )
         alignments.append(_to_source_timeline(local_alignment, utterance))
 
-    return _restore_particle_surface_forms(
+    restored = _restore_particle_surface_forms(
         detect_particles(transcript.video_id, alignments),
         transcript,
+    )
+    return ParticleDetectionResult(
+        video_id=restored.video_id,
+        provenance=ParticleDetectionProvenance(
+            duration_ms=manifest.duration_ms,
+            fps=manifest.fps,
+            transcript_sha256=manifest.transcript_sha256,
+            source_audio_sha256=manifest.source_audio_sha256,
+            normalized_video_sha256=manifest.normalized_video_sha256,
+            dictionary_model=manifest.dictionary_model,
+            acoustic_model=manifest.acoustic_model,
+        ),
+        particles=restored.particles,
+        candidates=restored.candidates,
     )

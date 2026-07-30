@@ -122,6 +122,13 @@ def test_detection_offsets_segment_times_to_source_timeline(tmp_path: Path) -> N
     assert particle.fp_token == "吗"
     assert particle.fp_start_ms == 13_900
     assert particle.fp_end_ms == 14_480
+    assert result.schema_version == 1
+    assert result.provenance is not None
+    assert result.provenance.duration_ms == 20_000
+    assert result.provenance.fps == 30
+    assert result.provenance.transcript_sha256 == transcript_sha256(reviewed)
+    assert result.provenance.dictionary_model == "mandarin_china_mfa"
+    assert result.provenance.acoustic_model == "mandarin_mfa"
 
 
 def test_detection_refuses_unconfirmed_transcript(tmp_path: Path) -> None:

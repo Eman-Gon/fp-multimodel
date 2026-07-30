@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type {
+  TrackAParticle,
+  TrackAParticleDetectionResult,
+  TrackAExtendedParticleCandidate,
+} from "../lib/types.ts";
 import { createTrackBHandoff } from "../lib/track-b/track-a-handoff.ts";
 
 const draftProvenance = {
@@ -8,6 +13,30 @@ const draftProvenance = {
   confidence: null,
   confirmed: false as const,
 };
+
+function artifact(
+  particles: readonly TrackAParticle[],
+  options: {
+    durationMs?: number;
+    candidates?: readonly TrackAExtendedParticleCandidate[];
+  } = {},
+): TrackAParticleDetectionResult {
+  return {
+    schema_version: 1,
+    video_id: "vid1",
+    provenance: {
+      duration_ms: options.durationMs ?? 2_000,
+      fps: 30,
+      transcript_sha256: "a".repeat(64),
+      source_audio_sha256: "b".repeat(64),
+      normalized_video_sha256: "c".repeat(64),
+      dictionary_model: "mandarin_china_mfa",
+      acoustic_model: "mandarin_mfa",
+    },
+    particles,
+    candidates: options.candidates ?? [],
+  };
+}
 
 test("adapts the current Track A particle artifact without losing metadata", () => {
   const trackAParticle = {
@@ -22,11 +51,7 @@ test("adapts the current Track A particle artifact without losing metadata", () 
   };
 
   const handoff = createTrackBHandoff(
-    {
-      video_id: "vid1",
-      particles: [trackAParticle],
-    },
-    20_000,
+    artifact([trackAParticle], { durationMs: 20_000 }),
   );
 
   assert.deepEqual(handoff.request, {
@@ -51,15 +76,15 @@ test("adapts the current Track A particle artifact without losing metadata", () 
     handoff.particles_by_instance_id["vid1:u1"],
     trackAParticle,
   );
+  assert.deepEqual(handoff.candidates_for_review, []);
 });
 
 test("rejects zero-duration Track A intervals at the B handoff", () => {
   assert.throws(
     () =>
       createTrackBHandoff(
-        {
-          video_id: "vid1",
-          particles: [
+        artifact(
+          [
             {
               ...draftProvenance,
               instance_id: "vid1:u1",
@@ -71,8 +96,7 @@ test("rejects zero-duration Track A intervals at the B handoff", () => {
               utterance_id: "u1",
             },
           ],
-        },
-        2_000,
+        ),
       ),
     /end_ms must be greater/,
   );
@@ -93,17 +117,15 @@ test("rejects duplicate utterance IDs and particles beyond the source duration",
   assert.throws(
     () =>
       createTrackBHandoff(
-        {
-          video_id: "vid1",
-          particles: [
+        artifact(
+          [
             duplicate,
             {
               ...duplicate,
               instance_id: "vid1:u1:duplicate",
             },
           ],
-        },
-        2_000,
+        ),
       ),
     /duplicate Track A utterance_id/,
   );
@@ -111,9 +133,8 @@ test("rejects duplicate utterance IDs and particles beyond the source duration",
   assert.throws(
     () =>
       createTrackBHandoff(
-        {
-          video_id: "vid1",
-          particles: [
+        artifact(
+          [
             {
               ...duplicate,
               instance_id: "vid1:u2",
@@ -122,8 +143,7 @@ test("rejects duplicate utterance IDs and particles beyond the source duration",
               fp_end_ms: 2_100,
             },
           ],
-        },
-        2_000,
+        ),
       ),
     /must not exceed/,
   );
@@ -144,11 +164,9 @@ test("validates Track A particle vocabulary before building model prompts", () =
   assert.throws(
     () =>
       createTrackBHandoff(
-        {
-          video_id: "vid1",
-          particles: [{ ...valid, fp_pinyin: "ne" }],
-        },
-        2_000,
+        artifact([
+          { ...valid, fp_pinyin: "ne" },
+        ] as never),
       ),
     /fp_pinyin does not match/,
   );
@@ -156,11 +174,9 @@ test("validates Track A particle vocabulary before building model prompts", () =
   assert.throws(
     () =>
       createTrackBHandoff(
-        {
-          video_id: "vid1",
-          particles: [{ ...valid, surface_form: "呢" }],
-        },
-        2_000,
+        artifact([
+          { ...valid, surface_form: "呢" },
+        ]),
       ),
     /surface_form does not match/,
   );
@@ -170,9 +186,8 @@ test("rejects a stale or cross-video Track A instance ID", () => {
   assert.throws(
     () =>
       createTrackBHandoff(
-        {
-          video_id: "vid1",
-          particles: [
+        artifact(
+          [
             {
               ...draftProvenance,
               instance_id: "vid2:u9",
@@ -184,8 +199,7 @@ test("rejects a stale or cross-video Track A instance ID", () => {
               utterance_id: "u1",
             },
           ],
-        },
-        2_000,
+        ),
       ),
     /instance_id must equal vid1:u1/,
   );
@@ -207,12 +221,39 @@ test("refuses to promote Track A draft provenance at the handoff", () => {
   assert.throws(
     () =>
       createTrackBHandoff(
-        {
-          video_id: "vid1",
-          particles: [invalid],
-        } as never,
-        2_000,
+        artifact([invalid] as never),
       ),
     /must remain unconfirmed/,
+  );
+});
+
+test("keeps extended candidates out of Track B and available for review", () => {
+  const candidate = {
+    instance_id: "vid1:u2",
+    normalized_candidate: "了吗吧",
+    surface_form: "了嗎吧",
+    start_ms: 1_100,
+    end_ms: 1_500,
+    utterance_id: "u2",
+    source: "mfa_rule" as const,
+    confidence: null,
+    confirmed: false as const,
+    review_required: true as const,
+  };
+
+  const handoff = createTrackBHandoff(
+    artifact([], { candidates: [candidate] }),
+  );
+
+  assert.deepEqual(handoff.request.particle_instances, []);
+  assert.deepEqual(handoff.candidates_for_review, [candidate]);
+});
+
+test("derives video duration from versioned Track A provenance", () => {
+  const invalid = artifact([], { durationMs: 0 });
+
+  assert.throws(
+    () => createTrackBHandoff(invalid),
+    /duration_ms must be positive/,
   );
 });
