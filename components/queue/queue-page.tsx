@@ -88,7 +88,7 @@ export function QueuePage({ clips, clipSummaries }: QueuePageProps) {
   const resetDemo = async () => {
     if (
       !window.confirm(
-        "Reset both demo clips? This removes every review decision made in this demo session.",
+        "Reset all demo clips? This removes every review decision made in this demo session.",
       )
     ) {
       return;

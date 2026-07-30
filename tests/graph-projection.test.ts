@@ -8,6 +8,7 @@ import {
   createSecondDemoClip,
 } from "../lib/track-c/seed.ts";
 import type { TimeRange } from "../lib/types.ts";
+import { TARGET_PARTICLES } from "../lib/vocab.ts";
 import type { ParticleToken } from "../lib/vocab.ts";
 import type {
   ClipDetail,
@@ -23,12 +24,13 @@ test("demo graph is visibly scoped and preserves video-qualified identities", ()
     demo_fixture: true,
     confirmed_only: false,
     truncated: false,
-    unique_clip_count: 2,
-    unique_video_count: 2,
-    particle_instance_count: 2,
+    unique_clip_count: 7,
+    unique_video_count: 3,
+    particle_instance_count: 7,
   });
-  assert.ok(graph.nodes.some(({ id }) => id === "Particle:吗"));
-  assert.ok(graph.nodes.some(({ id }) => id === "Particle:吧"));
+  for (const { token } of TARGET_PARTICLES) {
+    assert.ok(graph.nodes.some(({ id }) => id === `Particle:${token}`));
+  }
   assert.ok(graph.nodes.some(({ id }) => id === "Speaker:vid03:spkA"));
   assert.ok(graph.nodes.some(({ id }) => id === "Speaker:vid04:spkB"));
   assert.notEqual(
@@ -56,13 +58,32 @@ test("particle occurrence relationships retain stable IDs, surface form, time, a
   );
 });
 
-test("confirmed graph starts empty and never promotes draft fixtures", () => {
-  const graph = buildGraphDataset(createDemoClips(), "confirmed");
+test("confirmed graph includes only fully reviewed demo fixtures", () => {
+  const clips = createDemoClips();
+  const confirmedClips = clips.filter(
+    ({ clip }) => clip.status === "confirmed",
+  );
+  const pendingClips = clips.filter(
+    ({ clip }) => clip.status !== "confirmed",
+  );
+  const graph = buildGraphDataset(clips, "confirmed");
 
   assert.equal(graph.meta.confirmed_only, true);
-  assert.equal(graph.meta.unique_clip_count, 0);
-  assert.deepEqual(graph.nodes, []);
-  assert.deepEqual(graph.links, []);
+  assert.equal(confirmedClips.length, 3);
+  assert.equal(graph.meta.unique_clip_count, confirmedClips.length);
+  assert.equal(graph.meta.unique_video_count, 3);
+  assert.equal(graph.meta.particle_instance_count, 3);
+  for (const clip of confirmedClips) {
+    assert.ok(
+      graph.nodes.some(({ id }) => id === `Clip:${clip.clip.id}`),
+    );
+  }
+  for (const clip of pendingClips) {
+    assert.equal(
+      graph.nodes.some(({ id }) => id === `Clip:${clip.clip.id}`),
+      false,
+    );
+  }
 });
 
 test("confirmed graph includes only explicitly reviewed values", () => {

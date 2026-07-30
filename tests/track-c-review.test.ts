@@ -213,27 +213,90 @@ test("multi-particle review keys preserve instance pairing", () => {
   ]);
 });
 
-test("demo corpus contains clips from multiple independent videos", () => {
+test("demo corpus covers the validated particle inventory without breaking research invariants", () => {
   const clips = createDemoClips();
+  const particleInstances = clips.flatMap(
+    ({ particle_instances }) => particle_instances,
+  );
+  const tokens = particleInstances.map(
+    ({ fields }) => fields.fp_token.value ?? fields.fp_token.suggestion.value,
+  );
 
-  assert.equal(clips.length, 2);
   assert.deepEqual(
-    clips.map(({ video }) => video.id),
-    ["vid03", "vid04"],
-  );
-  assert.equal(new Set(clips.map(({ clip }) => clip.name)).size, 2);
-  assert.deepEqual(
-    clips.map(({ particle_instances }) =>
-      particle_instances[0]?.fields.fp_token.value,
-    ),
-    ["吗", "吧"],
+    [...new Set(tokens)].sort(),
+    TARGET_PARTICLES.map(({ token }) => token).sort(),
   );
   assert.deepEqual(
-    clips.map(({ particle_instances }) =>
-      particle_instances[0]?.instance_id,
-    ),
-    ["vid03:u17", "vid04:u09"],
+    [...new Set(clips.map(({ video }) => video.id))].sort(),
+    ["vid03", "vid04", "vid05"],
   );
+  assert.equal(clips.length, TARGET_PARTICLES.length);
+  assert.equal(
+    new Set(clips.map(({ clip }) => clip.name)).size,
+    clips.length,
+  );
+  assert.equal(
+    new Set(particleInstances.map(({ instance_id }) => instance_id)).size,
+    particleInstances.length,
+  );
+  assert.deepEqual(
+    [...new Set(clips.map(({ clip }) => clip.status))].sort(),
+    ["confirmed", "draft", "in_review"],
+  );
+
+  for (const clip of clips) {
+    assert.equal(clip.demo_fixture, true);
+    assert.match(clip.fixture_note, /simulated/i);
+    assert.match(clip.fixture_note, /not research evidence/i);
+    assert.equal(clip.fields.fp_count.state, "confirmed");
+    assert.equal(clip.fields.fp_count.suggestion.source, "derived");
+    assert.equal(clip.fields.fp_count.value, clip.particle_instances.length);
+    assert.equal(
+      clip.fields.fp_count.suggestion.value,
+      clip.particle_instances.length,
+    );
+    assert.ok(Number.isSafeInteger(clip.clip.start_ms));
+    assert.ok(Number.isSafeInteger(clip.clip.end_ms));
+    assert.ok(clip.clip.start_ms >= 0);
+    assert.ok(clip.clip.end_ms <= clip.video.duration_ms);
+    assert.ok(clip.clip.end_ms > clip.clip.start_ms);
+    assert.equal(
+      summarizeReview(clip).ready,
+      clip.clip.status === "confirmed",
+    );
+    assert.ok(
+      clip.participant_options.every(
+        ({ region, region_source, region_confirmed }) =>
+          region === null &&
+          region_source === null &&
+          region_confirmed === false,
+      ),
+    );
+
+    for (const particle of clip.particle_instances) {
+      const token =
+        particle.fields.fp_token.value ??
+        particle.fields.fp_token.suggestion.value;
+      const target = TARGET_PARTICLES.find(
+        ({ token: targetToken }) => targetToken === token,
+      );
+      const timing =
+        particle.fields.fp_timing.value ??
+        particle.fields.fp_timing.suggestion.value;
+
+      assert.ok(particle.instance_id.startsWith(`${clip.video.id}:`));
+      assert.ok(target);
+      assert.equal(particle.fp_pinyin, target.pinyin);
+      assert.ok(
+        new Set<string>(target.surface_forms).has(particle.surface_form),
+      );
+      assert.ok(Number.isSafeInteger(timing.start_ms));
+      assert.ok(Number.isSafeInteger(timing.end_ms));
+      assert.ok(timing.start_ms >= clip.clip.start_ms);
+      assert.ok(timing.end_ms <= clip.clip.end_ms);
+      assert.ok(timing.end_ms > timing.start_ms);
+    }
+  }
 });
 
 test("extended candidates and external source remain explicitly unverified", () => {
