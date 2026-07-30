@@ -13,6 +13,7 @@ from fp_multimodel.models import (
     ParticleDetectionResult,
     ParticleDetectionProvenance,
     ParticleInstance,
+    ParticleScanResult,
     Transcript,
     Utterance,
     UtteranceAlignment,
@@ -126,9 +127,9 @@ def _expected_terminal_detection(
 
 
 def _restore_particle_surface_forms(
-    result: ParticleDetectionResult,
+    result: ParticleScanResult,
     transcript: Transcript,
-) -> ParticleDetectionResult:
+) -> ParticleScanResult:
     utterances = {utterance.id: utterance for utterance in transcript.utterances}
     restored_particles: list[ParticleInstance] = []
     restored_candidates: list[ExtendedParticleCandidate] = []
@@ -171,7 +172,7 @@ def _restore_particle_surface_forms(
             )
         )
 
-    restored_result = ParticleDetectionResult(
+    restored_result = ParticleScanResult(
         video_id=result.video_id,
         particles=restored_particles,
         candidates=restored_candidates,
@@ -184,9 +185,18 @@ def _restore_particle_surface_forms(
         expected = _expected_terminal_detection(utterance)
         if expected is None:
             continue
+        kind, value = expected
         detection = detections.get(utterance.id)
-        if detection is None:
-            kind, value = expected
+        matches_expected = (
+            isinstance(detection, ExtendedParticleCandidate)
+            and kind == "candidate"
+            and detection.normalized_candidate == value
+        ) or (
+            isinstance(detection, ParticleInstance)
+            and kind == "particle"
+            and detection.fp_token == value
+        )
+        if not matches_expected:
             raise ValueError(
                 f"alignment did not detect confirmed transcript {kind} "
                 f"{value!r} for utterance {utterance.id!r}; review the "
@@ -239,6 +249,8 @@ def detect_from_mfa_output(
             "alignment was produced from a different transcript revision; "
             "prepare and align the reviewed corpus again"
         )
+    if manifest.dictionary_model is None or manifest.acoustic_model is None:
+        raise ValueError("alignment manifest is missing its MFA model identity")
 
     alignments = []
     for utterance in transcript.utterances:

@@ -4,8 +4,10 @@ from pydantic import ValidationError
 from fp_multimodel.models import (
     Clause,
     LinguisticContext,
+    ParticleDetectionProvenance,
     ParticleDetectionResult,
     ParticleInstance,
+    ParticleScanResult,
     SpeakerProfile,
     Transcript,
     TranscriptBatch,
@@ -180,7 +182,37 @@ def test_particle_detection_result_rejects_duplicate_instance_ids() -> None:
         utterance_id="u1",
     )
     with pytest.raises(ValidationError, match="instance_ids must be unique"):
-        ParticleDetectionResult(video_id="vid1", particles=[particle, particle])
+        ParticleScanResult(video_id="vid1", particles=[particle, particle])
+
+
+def test_final_particle_artifact_requires_provenance_and_source_bounds() -> None:
+    particle = ParticleInstance(
+        instance_id="vid1:u1",
+        fp_token="吗",
+        fp_pinyin="ma",
+        surface_form="吗",
+        fp_start_ms=1000,
+        fp_end_ms=1100,
+        utterance_id="u1",
+    )
+
+    with pytest.raises(ValidationError, match="provenance"):
+        ParticleDetectionResult(video_id="vid1", particles=[particle])
+
+    with pytest.raises(ValidationError, match="must not exceed provenance"):
+        ParticleDetectionResult(
+            video_id="vid1",
+            provenance=ParticleDetectionProvenance(
+                duration_ms=1050,
+                fps=30,
+                transcript_sha256="a" * 64,
+                source_audio_sha256="b" * 64,
+                normalized_video_sha256="c" * 64,
+                dictionary_model="mandarin_china_mfa",
+                acoustic_model="mandarin_mfa",
+            ),
+            particles=[particle],
+        )
 
 
 def test_rule_derived_particle_cannot_claim_human_confirmation() -> None:

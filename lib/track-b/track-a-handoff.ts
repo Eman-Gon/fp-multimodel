@@ -91,6 +91,31 @@ function validateSha256(value: string, label: string): void {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function assertDetectionEnvelope(
+  detection: unknown,
+): asserts detection is TrackAParticleDetectionResult {
+  if (!isRecord(detection)) {
+    throw new TypeError("detection must be an object");
+  }
+  if (detection.schema_version !== 1) {
+    throw new TypeError("detection.schema_version must equal 1");
+  }
+  assertNonEmptyId(detection.video_id, "detection.video_id");
+  if (!isRecord(detection.provenance)) {
+    throw new TypeError("detection.provenance must be an object");
+  }
+  if (!Array.isArray(detection.particles)) {
+    throw new TypeError("detection.particles must be an array");
+  }
+  if (!Array.isArray(detection.candidates)) {
+    throw new TypeError("detection.candidates must be an array");
+  }
+}
+
 function validateCandidate(
   candidate: TrackAExtendedParticleCandidate,
   videoId: string,
@@ -157,12 +182,9 @@ function validateCandidate(
  * instance_id that later graph relationships must preserve.
  */
 export function createTrackBHandoff(
-  detection: TrackAParticleDetectionResult,
+  detection: unknown,
 ): TrackBHandoff {
-  if (detection.schema_version !== 1) {
-    throw new TypeError("detection.schema_version must equal 1");
-  }
-  assertNonEmptyId(detection.video_id, "detection.video_id");
+  assertDetectionEnvelope(detection);
   const videoDurationMs = detection.provenance.duration_ms;
   assertMilliseconds(videoDurationMs, "videoDurationMs");
   if (videoDurationMs <= 0) {
@@ -198,6 +220,9 @@ export function createTrackBHandoff(
   const seenInstanceIds = new Set<string>();
 
   for (const [index, particle] of detection.particles.entries()) {
+    if (!isRecord(particle)) {
+      throw new TypeError(`particles[${index}] must be an object`);
+    }
     assertNonEmptyId(particle.utterance_id, `particles[${index}].utterance_id`);
 
     if (seenUtteranceIds.has(particle.utterance_id)) {
@@ -225,6 +250,9 @@ export function createTrackBHandoff(
   }
 
   for (const [index, candidate] of detection.candidates.entries()) {
+    if (!isRecord(candidate)) {
+      throw new TypeError(`candidates[${index}] must be an object`);
+    }
     if (seenUtteranceIds.has(candidate.utterance_id)) {
       throw new RangeError(
         `duplicate Track A utterance_id: ${candidate.utterance_id}`,
@@ -246,6 +274,8 @@ export function createTrackBHandoff(
   }
 
   return {
+    schema_version: detection.schema_version,
+    provenance: detection.provenance,
     request: {
       video_id: detection.video_id,
       video_duration_ms: videoDurationMs,

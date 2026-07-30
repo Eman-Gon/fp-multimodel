@@ -50,10 +50,11 @@ test("adapts the current Track A particle artifact without losing metadata", () 
     utterance_id: "u1",
   };
 
-  const handoff = createTrackBHandoff(
-    artifact([trackAParticle], { durationMs: 20_000 }),
-  );
+  const detection = artifact([trackAParticle], { durationMs: 20_000 });
+  const handoff = createTrackBHandoff(detection);
 
+  assert.equal(handoff.schema_version, detection.schema_version);
+  assert.equal(handoff.provenance, detection.provenance);
   assert.deepEqual(handoff.request, {
     video_id: "vid1",
     video_duration_ms: 20_000,
@@ -255,5 +256,47 @@ test("derives video duration from versioned Track A provenance", () => {
   assert.throws(
     () => createTrackBHandoff(invalid),
     /duration_ms must be positive/,
+  );
+});
+
+test("rejects a missing or null Track A provenance object", () => {
+  const valid = artifact([]);
+
+  assert.throws(
+    () => createTrackBHandoff({ ...valid, provenance: null }),
+    /detection\.provenance must be an object/,
+  );
+  assert.throws(
+    () => {
+      const { provenance: _provenance, ...withoutProvenance } = valid;
+      createTrackBHandoff(withoutProvenance);
+    },
+    /detection\.provenance must be an object/,
+  );
+});
+
+test("rejects non-array Track A particle and candidate collections", () => {
+  const valid = artifact([]);
+
+  assert.throws(
+    () => createTrackBHandoff({ ...valid, particles: {} }),
+    /detection\.particles must be an array/,
+  );
+  assert.throws(
+    () => createTrackBHandoff({ ...valid, candidates: null }),
+    /detection\.candidates must be an array/,
+  );
+});
+
+test("rejects non-object entries at the Track A JSON boundary", () => {
+  const valid = artifact([]);
+
+  assert.throws(
+    () => createTrackBHandoff({ ...valid, particles: [null] }),
+    /particles\[0\] must be an object/,
+  );
+  assert.throws(
+    () => createTrackBHandoff({ ...valid, candidates: [null] }),
+    /candidates\[0\] must be an object/,
   );
 });

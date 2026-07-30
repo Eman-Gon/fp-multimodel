@@ -269,17 +269,15 @@ class ParticleDetectionProvenance(StrictModel):
     acoustic_model: str = Field(min_length=1)
 
 
-class ParticleDetectionResult(StrictModel):
-    """Serializable result of scanning one video's reviewed alignments."""
+class ParticleScanResult(StrictModel):
+    """Internal result before alignment provenance is attached."""
 
-    schema_version: Literal[1] = 1
     video_id: str = Field(min_length=1)
-    provenance: ParticleDetectionProvenance | None = None
     particles: list[ParticleInstance]
     candidates: list[ExtendedParticleCandidate] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_instance_identity(self) -> ParticleDetectionResult:
+    def validate_instance_identity(self) -> ParticleScanResult:
         detections: list[ParticleInstance | ExtendedParticleCandidate] = [
             *self.particles,
             *self.candidates,
@@ -296,5 +294,26 @@ class ParticleDetectionResult(StrictModel):
                 raise ValueError(
                     "particle instance_id must equal "
                     f"{expected_instance_id!r} for this video and utterance"
+                )
+        return self
+
+
+class ParticleDetectionResult(ParticleScanResult):
+    """Versioned Track A artifact emitted after reviewed MFA alignment."""
+
+    schema_version: Literal[1] = 1
+    provenance: ParticleDetectionProvenance
+
+    @model_validator(mode="after")
+    def validate_source_timeline_bounds(self) -> ParticleDetectionResult:
+        for particle in self.particles:
+            if particle.fp_end_ms > self.provenance.duration_ms:
+                raise ValueError(
+                    "particle fp_end_ms must not exceed provenance duration_ms"
+                )
+        for candidate in self.candidates:
+            if candidate.end_ms > self.provenance.duration_ms:
+                raise ValueError(
+                    "candidate end_ms must not exceed provenance duration_ms"
                 )
         return self

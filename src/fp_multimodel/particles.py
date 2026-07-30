@@ -8,8 +8,8 @@ from collections.abc import Iterable, Sequence
 from fp_multimodel.models import (
     AlignedInterval,
     ExtendedParticleCandidate,
-    ParticleDetectionResult,
     ParticleInstance,
+    ParticleScanResult,
     UtteranceAlignment,
 )
 from fp_multimodel.vocab import (
@@ -183,7 +183,7 @@ def detect_final_particle(
 def detect_particles(
     video_id: str,
     alignments: Iterable[UtteranceAlignment],
-) -> ParticleDetectionResult:
+) -> ParticleScanResult:
     """Detect one canonical particle or review-only candidate per alignment."""
 
     particles: list[ParticleInstance] = []
@@ -206,7 +206,7 @@ def detect_particles(
         if particle is not None:
             particles.append(particle)
 
-    return ParticleDetectionResult(
+    return ParticleScanResult(
         video_id=video_id,
         particles=particles,
         candidates=candidates,

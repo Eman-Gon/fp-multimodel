@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from fp_multimodel.models import (
     AlignedInterval,
     ExtendedParticleCandidate,
-    ParticleDetectionResult,
+    ParticleScanResult,
     UtteranceAlignment,
 )
 from fp_multimodel.particles import (
@@ -252,7 +252,7 @@ def test_detection_result_requires_video_scoped_instance_identity() -> None:
     )
 
     with pytest.raises(ValidationError, match="instance_id must equal"):
-        ParticleDetectionResult(
+        ParticleScanResult(
             video_id="video-1",
             particles=[],
             candidates=[candidate],

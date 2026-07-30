@@ -210,3 +210,36 @@ def test_detection_surfaces_alignment_omission_for_confirmed_particle(
 
     with pytest.raises(ValueError, match="did not detect confirmed transcript particle"):
         detect_from_mfa_output(reviewed, tmp_path)
+
+
+def test_detection_rejects_silent_reduction_of_confirmed_candidate(
+    tmp_path: Path,
+) -> None:
+    speaker_dir = tmp_path / "spkA"
+    speaker_dir.mkdir()
+    reduced_textgrid = TEXTGRID.replace('text = "吗"', 'text = "吧"')
+    (speaker_dir / "u1.TextGrid").write_text(
+        reduced_textgrid,
+        encoding="utf-8",
+    )
+    reviewed = Transcript(
+        video_id="vid1",
+        utterances=[
+            Utterance(
+                id="u1",
+                start_ms=12_400,
+                end_ms=15_100,
+                text="你了吗吧",
+                speaker="spkA",
+                confidence=0.8,
+                transcript_confirmed=True,
+            )
+        ],
+    )
+    write_alignment_manifest(tmp_path, reviewed)
+
+    with pytest.raises(
+        ValueError,
+        match="did not detect confirmed transcript candidate '了吗吧'",
+    ):
+        detect_from_mfa_output(reviewed, tmp_path)

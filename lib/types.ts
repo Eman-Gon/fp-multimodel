@@ -143,6 +143,8 @@ export type TrackBVideoDraft =
  * the narrow request needed by the Track B analyzer.
  */
 export interface TrackBHandoff {
+  readonly schema_version: TrackAParticleDetectionResult["schema_version"];
+  readonly provenance: TrackAProcessingProvenance;
   readonly request: TrackBRequest;
   readonly particles_by_instance_id: Readonly<
     Record<string, TrackAParticle>
