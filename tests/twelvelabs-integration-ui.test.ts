@@ -336,7 +336,7 @@ test("the setup view exposes a local video picker and visible indexing IDs", () 
   assert.match(markup, /Local video file/);
   assert.match(markup, /one-minute\.mp4/);
   assert.match(markup, /1\.5 KB/);
-  assert.match(markup, /Upload &amp; index file/);
+  assert.match(markup, /Uploaded &amp; indexed/);
   assert.match(markup, /Upload and indexing complete/);
   assert.match(markup, /asset-123/);
   assert.match(markup, /indexed-456/);

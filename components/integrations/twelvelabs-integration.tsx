@@ -255,7 +255,7 @@ export function TwelveLabsIntegration({
       connectionState.status !== "configured" ||
       videoId.trim().length === 0 ||
       !hasUploadSource ||
-      indexState.status === "processing"
+      (indexState.status !== "idle" && indexState.status !== "failed")
     ) {
       return;
     }
@@ -468,7 +468,7 @@ export function TwelveLabsIntegrationView({
     connectionState.status === "configured" &&
     videoId.trim().length > 0 &&
     hasUploadSource &&
-    indexState.status !== "processing";
+    (indexState.status === "idle" || indexState.status === "failed");
   const canAnalyze =
     connectionState.status === "configured" &&
     indexState.status === "ready" &&
@@ -656,6 +656,8 @@ export function TwelveLabsIntegrationView({
             >
               {indexState.status === "processing" ? (
                 <LoaderCircle className="is-spinning" aria-hidden="true" />
+              ) : indexState.status === "ready" ? (
+                <CheckCircle2 aria-hidden="true" />
               ) : videoFile !== null ? (
                 <Upload aria-hidden="true" />
               ) : (
@@ -663,6 +665,8 @@ export function TwelveLabsIntegrationView({
               )}
               {indexState.status === "processing"
                 ? "Uploading & indexing…"
+                : indexState.status === "ready"
+                  ? "Uploaded & indexed"
                 : videoFile === null
                   ? "Index public URL"
                   : "Upload & index file"}
