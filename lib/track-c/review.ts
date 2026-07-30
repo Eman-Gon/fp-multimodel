@@ -91,6 +91,7 @@ export function listReviewUnits(clip: ClipDetail): readonly ReviewUnit[] {
     clipUnit(clip, "sentence_type", "Sentence type"),
     clipUnit(clip, "tone_contour", "Tone contour"),
     clipUnit(clip, "discourse_context", "Discourse context"),
+    clipUnit(clip, "sentence_text", "Sentence"),
     clipUnit(clip, "clauses", "Clauses"),
     clipUnit(clip, "communicative_function", "Communicative function"),
     clipUnit(clip, "meaning_explanation", "Meaning explanation"),
@@ -204,6 +205,7 @@ export function applyClipCommand(
         "A field without a value cannot be confirmed.",
       );
     }
+    validateFieldValue(next, command.target, value);
     field.value = value;
     field.state = "confirmed";
     field.review = decision(

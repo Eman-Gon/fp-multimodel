@@ -59,6 +59,8 @@ and linguistic-function review.
 
 The complete product and annotation requirements are recorded in
 [`docs/product-spec.md`](docs/product-spec.md).
+The graph-access, MCP, and optional GraphRAG boundaries are recorded in
+[`docs/neo4j-explorer.md`](docs/neo4j-explorer.md).
 
 ## Why
 
@@ -100,7 +102,8 @@ Raw video
 
 ## Data model (Neo4j)
 
-**Nodes:** `Video`, `Clip`, `Speaker`, `Particle`, `Gesture`, `SentenceType`
+**Nodes:** `Video`, `Utterance`, `Clip`, `Speaker`, `Particle`, `Gesture`,
+`SentenceType`, `Tone`, `CommunicativeFunction`
 
 **Relationships:**
 - `(Clip)-[:SPOKEN_BY]->(Speaker)`
@@ -108,6 +111,12 @@ Raw video
 - `(Clip)-[:CONTAINS_PARTICLE {start_ms, end_ms, count}]->(Particle)`
 - `(Clip)-[:ACCOMPANIED_BY {start_ms, end_ms}]->(Gesture)`
 - `(Clip)-[:CLASSIFIED_AS]->(SentenceType)`
+- `(Clip)-[:HAS_TONE]->(Tone)`
+- `(Clip)-[:INTERPRETED_AS]->(CommunicativeFunction)`
+
+The browser graph uses stable domain IDs and a confirmed-only API projection;
+it never receives Neo4j credentials or arbitrary Cypher access. The in-memory
+fixture graph is a separate, visibly labeled demo mode.
 
 ## Track A foundation
 
@@ -116,6 +125,10 @@ The first runnable vertical slice lives in the Python package under
 
 - verified, video-scoped 30 fps normalization and 16 kHz mono WAV extraction,
   with source duration and SHA-256 provenance
+- a concrete Mandarin `openai-whisper` CLI adapter using `large-v3`, with
+  deterministic utterance IDs and source-timeline millisecond segments
+- an immutable original ASR suggestion plus provider/model/audio provenance,
+  kept separate from the editable transcript
 - strict JSON contracts for draft/reviewed utterances
 - an enforced human transcript checkpoint before alignment
 - MFA corpus preparation (`.wav` + corrected Chinese `.lab` per utterance)
@@ -137,16 +150,17 @@ The first runnable vertical slice lives in the Python package under
 - validated multi-video transcript batches with unique video identities
 - human-reviewable discourse, sentence, and clause context on each utterance
 
-The provider-neutral A2 boundary is present, but a concrete Whisper or
-TwelveLabs adapter is still pending. Sentence-type classification (A6) and
-nested discourse structure (A7) are also next increments. Until an ASR adapter
-is connected, `examples/transcript.draft.json` demonstrates its required output
-contract.
+The Whisper adapter is implemented behind the provider-neutral A2 boundary.
+Sentence-type classification (A6) and nested discourse structure (A7) remain
+next increments. `examples/transcript.draft.json` demonstrates the persisted
+suggestion/working-copy contract.
 
 ### Setup
 
-Python 3.11+, `uv`, and ffmpeg are required. Montreal Forced Aligner is also
-required for the alignment commands and must be available as `mfa` on `PATH`.
+Python 3.11+, `uv`, and ffmpeg are required. The external `openai-whisper`
+command is required for A2 and must be available as `whisper` on `PATH`.
+Montreal Forced Aligner is required for alignment and must be available as
+`mfa`.
 
 ```bash
 uv sync
@@ -154,7 +168,7 @@ uv run fp-track-a --help
 uv run pytest
 ```
 
-### Run A1 and A3–A5
+### Run A1–A5
 
 ```bash
 # A1: verified normalized.mp4 (30 fps), audio.wav (16 kHz mono), and a
@@ -163,13 +177,21 @@ uv run fp-track-a normalize input.mp4 \
   --video-id vid03 \
   --output-dir work/vid03
 
-# A2 contract / A3: validate ASR JSON, then human-correct it and explicitly set
-# transcript_confirmed=true on every reviewed utterance.
-uv run fp-track-a validate-transcript examples/transcript.draft.json
+# A2: run Mandarin Whisper. This produces a frozen original suggestion and an
+# editable, unconfirmed utterance working copy.
+uv run fp-track-a transcribe \
+  work/vid03/audio.wav \
+  --video-id vid03 \
+  --output work/vid03/transcript.draft.json
+
+# A3: copy the draft to transcript.reviewed.json; edit only utterances,
+# preserve asr_suggestion/source_segment_ids, and explicitly set
+# transcript_confirmed=true on every included utterance.
+uv run fp-track-a validate-transcript work/vid03/transcript.reviewed.json
 
 # A3: this command refuses unconfirmed transcripts.
 uv run fp-track-a prepare-corpus \
-  examples/transcript.reviewed.json \
+  work/vid03/transcript.reviewed.json \
   work/vid03/audio.wav \
   --output-dir work/vid03/corpus
 
@@ -181,7 +203,7 @@ uv run fp-track-a align \
 
 # A5: parse TextGrids and emit source-timeline particle instances.
 uv run fp-track-a detect-fps \
-  examples/transcript.reviewed.json \
+  work/vid03/transcript.reviewed.json \
   work/vid03/aligned \
   --output work/vid03/particles.json
 ```
@@ -230,6 +252,9 @@ The review interface now includes:
 - a visible particle + tone + sentence type + gesture meaning equation
 - a clip information panel with canonical times and derived frame numbers
 - a Clip Explorer grouped by particle and communicative function
+- a colorful force-directed Graph Explorer with demo and confirmed-corpus
+  scopes, semantic filters, search, neighborhood highlighting, and an evidence
+  inspector
 
 ```bash
 npm install

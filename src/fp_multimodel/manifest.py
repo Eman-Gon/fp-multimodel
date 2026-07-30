@@ -59,6 +59,12 @@ def transcript_sha256(transcript: Transcript) -> str:
 
     payload = {
         "video_id": transcript.video_id,
+        "transcript_origin": transcript.transcript_origin,
+        "asr_suggestion": (
+            transcript.asr_suggestion.model_dump(mode="json")
+            if transcript.asr_suggestion is not None
+            else None
+        ),
         "speakers": [speaker.model_dump() for speaker in transcript.speakers],
         "utterances": [
             {
@@ -68,6 +74,8 @@ def transcript_sha256(transcript: Transcript) -> str:
                 "text": utterance.text,
                 "surface_text": utterance.surface_text,
                 "speaker": utterance.speaker,
+                "confidence": utterance.confidence,
+                "source_segment_ids": list(utterance.source_segment_ids),
                 "transcript_confirmed": utterance.transcript_confirmed,
                 "linguistic_context": (
                     utterance.linguistic_context.model_dump()

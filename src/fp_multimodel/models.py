@@ -22,6 +22,73 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
+class FrozenStrictModel(StrictModel):
+    """Strict immutable record used for original model suggestions."""
+
+    model_config = ConfigDict(frozen=True)
+
+
+class AsrDiagnostic(FrozenStrictModel):
+    """One provider-native numeric diagnostic retained without reinterpretation."""
+
+    name: str = Field(min_length=1)
+    value: float = Field(allow_inf_nan=False)
+
+
+class AsrSuggestionSegment(FrozenStrictModel):
+    """One immutable segment exactly as proposed by the ASR stage."""
+
+    id: str = Field(min_length=1)
+    provider_segment_id: str = Field(min_length=1)
+    start_ms: Milliseconds
+    end_ms: Milliseconds
+    surface_text: str = Field(min_length=1)
+    speaker: str | None = None
+    confidence: Confidence | None = None
+    diagnostics: tuple[AsrDiagnostic, ...] = Field(default_factory=tuple)
+
+    @model_validator(mode="after")
+    def validate_time_range(self) -> "AsrSuggestionSegment":
+        if self.end_ms <= self.start_ms:
+            raise ValueError("end_ms must be greater than start_ms")
+        return self
+
+
+class AsrProvenance(FrozenStrictModel):
+    """Immutable identity for the provider run that produced a draft."""
+
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    language: Literal["zh"]
+    task: Literal["transcribe"]
+    confidence_method: Literal["provider", "exp_avg_logprob"]
+    source_audio_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    provider_output_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class TranscriptSuggestion(FrozenStrictModel):
+    """Complete original ASR output, kept separate from the reviewed transcript."""
+
+    schema_version: Literal[1] = 1
+    provenance: AsrProvenance
+    segments: tuple[AsrSuggestionSegment, ...] = Field(default_factory=tuple)
+
+    @model_validator(mode="after")
+    def validate_segments(self) -> "TranscriptSuggestion":
+        segment_ids = [segment.id for segment in self.segments]
+        if len(segment_ids) != len(set(segment_ids)):
+            raise ValueError("ASR suggestion segment ids must be unique")
+        provider_ids = [segment.provider_segment_id for segment in self.segments]
+        if len(provider_ids) != len(set(provider_ids)):
+            raise ValueError("ASR provider segment ids must be unique")
+        for previous, current in zip(self.segments, self.segments[1:], strict=False):
+            if current.start_ms < previous.end_ms:
+                raise ValueError(
+                    "ASR suggestion segments must be ordered and non-overlapping"
+                )
+        return self
+
+
 class Clause(StrictModel):
     """One clause in the corrected sentence, indexed by Unicode character."""
 
@@ -84,7 +151,8 @@ class Utterance(StrictModel):
     text: str = Field(min_length=1)
     surface_text: str = Field(min_length=1)
     speaker: str = Field(min_length=1)
-    confidence: Confidence
+    confidence: Confidence | None = None
+    source_segment_ids: list[str] = Field(default_factory=list)
     transcript_confirmed: bool = False
     linguistic_context: LinguisticContext | None = None
 
@@ -106,13 +174,25 @@ class Utterance(StrictModel):
     def validate_time_range(self) -> "Utterance":
         if self.end_ms <= self.start_ms:
             raise ValueError("end_ms must be greater than start_ms")
+        if len(self.source_segment_ids) != len(set(self.source_segment_ids)):
+            raise ValueError("source_segment_ids must be unique")
         return self
 
 
 class Transcript(StrictModel):
     """Draft or reviewed utterances for a single source video."""
 
+    model_config = ConfigDict(validate_assignment=True)
+
     video_id: str = Field(min_length=1)
+    transcript_origin: Literal["researcher", "asr"] = Field(
+        default="researcher",
+        frozen=True,
+    )
+    asr_suggestion: TranscriptSuggestion | None = Field(
+        default=None,
+        frozen=True,
+    )
     speakers: list[SpeakerProfile] = Field(default_factory=list)
     utterances: list[Utterance]
 
@@ -121,6 +201,32 @@ class Transcript(StrictModel):
         ids = [utterance.id for utterance in self.utterances]
         if len(ids) != len(set(ids)):
             raise ValueError("utterance ids must be unique")
+        if self.transcript_origin == "asr":
+            if self.asr_suggestion is None:
+                raise ValueError("ASR transcripts require the original ASR suggestion")
+            suggestion_ids = {
+                segment.id for segment in self.asr_suggestion.segments
+            }
+            for utterance in self.utterances:
+                if not utterance.source_segment_ids:
+                    raise ValueError(
+                        "ASR utterances require at least one source_segment_id"
+                    )
+                unknown_ids = set(utterance.source_segment_ids) - suggestion_ids
+                if unknown_ids:
+                    raise ValueError(
+                        "utterance source_segment_ids must reference the original "
+                        "ASR suggestion"
+                    )
+        else:
+            if self.asr_suggestion is not None:
+                raise ValueError(
+                    "researcher-origin transcripts cannot claim an ASR suggestion"
+                )
+            if any(utterance.source_segment_ids for utterance in self.utterances):
+                raise ValueError(
+                    "researcher-origin utterances cannot reference ASR segments"
+                )
         speaker_ids = [speaker.id for speaker in self.speakers]
         if len(speaker_ids) != len(set(speaker_ids)):
             raise ValueError("speaker ids must be unique within a video")

@@ -1,15 +1,50 @@
 {
   "video_id": "vid03",
+  "transcript_origin": "asr",
+  "asr_suggestion": {
+    "schema_version": 1,
+    "provenance": {
+      "provider": "openai_whisper_cli",
+      "model": "large-v3",
+      "language": "zh",
+      "task": "transcribe",
+      "confidence_method": "exp_avg_logprob",
+      "source_audio_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "provider_output_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "segments": [
+      {
+        "id": "u000001",
+        "provider_segment_id": "0",
+        "start_ms": 12400,
+        "end_ms": 15100,
+        "surface_text": "你吃飯了嗎",
+        "speaker": null,
+        "confidence": 0.82,
+        "diagnostics": [
+          {
+            "name": "avg_logprob",
+            "value": -0.19845093872383832
+          }
+        ]
+      }
+    ]
+  },
+  "speakers": [],
   "utterances": [
     {
-      "id": "u1",
+      "id": "u000001",
       "start_ms": 12400,
       "end_ms": 15100,
-      "text": "你吃饭了吗",
-      "speaker": "spkA",
+      "text": "你吃飯了吗",
+      "surface_text": "你吃飯了嗎",
+      "speaker": "spk_unknown",
       "confidence": 0.82,
-      "transcript_confirmed": false
+      "source_segment_ids": [
+        "u000001"
+      ],
+      "transcript_confirmed": false,
+      "linguistic_context": null
     }
   ]
 }
-

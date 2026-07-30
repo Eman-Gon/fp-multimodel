@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, ExternalLink, Layers3 } from "lucide-react";
+import {
+  ArrowRight,
+  ExternalLink,
+  Layers3,
+  LayoutList,
+  Network,
+} from "lucide-react";
 import {
   EXTENDED_PARTICLE_CANDIDATES,
   TARGET_PARTICLES,
@@ -45,14 +51,36 @@ export function ClipExplorer({
             reviewed corpus by particle and communicative function.
           </p>
         </div>
-        <div className="explorer-project-count">
-          <Layers3 aria-hidden="true" />
-          <strong>{new Set(clips.map(({ video_id }) => video_id)).size}</strong>
-          <span>videos in reviewed clips</span>
+        <div className="explorer-header__tools">
+          <nav className="explorer-view-switch" aria-label="Explorer view">
+            <Link
+              href="/explore"
+              className="is-selected"
+              aria-current="page"
+              prefetch={false}
+            >
+              <LayoutList aria-hidden="true" />
+              Reviewed clips
+            </Link>
+            <Link href="/explore/graph" prefetch={false}>
+              <Network aria-hidden="true" />
+              Graph
+            </Link>
+          </nav>
+          <div className="explorer-project-count">
+            <Layers3 aria-hidden="true" />
+            <strong>
+              {new Set(clips.map(({ video_id }) => video_id)).size}
+            </strong>
+            <span>videos in reviewed clips</span>
+          </div>
         </div>
       </header>
 
-      <section className="source-references" aria-labelledby="source-reference-title">
+      <section
+        className="source-references"
+        aria-labelledby="source-reference-title"
+      >
         <div>
           <h2 id="source-reference-title">Video references</h2>
           <p>
@@ -68,7 +96,8 @@ export function ClipExplorer({
             key={source.id}
           >
             <span>
-              {source.title ?? `YouTube reference ${source.id.replace("yt_", "")}`}
+              {source.title ??
+                `YouTube reference ${source.id.replace("yt_", "")}`}
             </span>
             <small>
               Region{" "}

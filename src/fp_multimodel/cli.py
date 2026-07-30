@@ -12,6 +12,10 @@ from fp_multimodel.jsonio import load_transcript, load_transcript_batch, write_m
 from fp_multimodel.media import normalize_media
 from fp_multimodel.mfa import align_corpus, download_mandarin_models
 from fp_multimodel.pipeline import detect_from_mfa_output
+from fp_multimodel.transcription import (
+    WhisperCliMandarinAsr,
+    create_draft_transcript,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -19,7 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="fp-track-a",
         description=(
             "Track A: normalize media, prepare reviewed transcripts for MFA, "
-            "align, and detect utterance-final particles."
+            "transcribe Mandarin audio, align, and detect utterance-final particles."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -46,6 +50,18 @@ def build_parser() -> argparse.ArgumentParser:
     normalize.add_argument("--force", action="store_true")
     normalize.add_argument("--ffmpeg-bin", default="ffmpeg")
     normalize.add_argument("--ffprobe-bin", default="ffprobe")
+
+    transcribe = subparsers.add_parser(
+        "transcribe",
+        help="create a review-required Mandarin draft with Whisper large-v3",
+    )
+    transcribe.add_argument("audio", type=Path)
+    transcribe.add_argument("--video-id", required=True)
+    transcribe.add_argument("--output", type=Path, required=True)
+    transcribe.add_argument("--model", default="large-v3")
+    transcribe.add_argument("--whisper-bin", default="whisper")
+    transcribe.add_argument("--speaker-id", default="spk_unknown")
+    transcribe.add_argument("--force", action="store_true")
 
     corpus = subparsers.add_parser(
         "prepare-corpus",
@@ -120,6 +136,23 @@ def _dispatch(args: argparse.Namespace) -> None:
         print(f"normalized video: {outputs.video}")
         print(f"16 kHz mono audio: {outputs.audio}")
         print(f"verified media manifest: {outputs.manifest_path}")
+        return
+
+    if args.command == "transcribe":
+        transcript = create_draft_transcript(
+            args.video_id,
+            args.audio,
+            WhisperCliMandarinAsr(
+                whisper_bin=args.whisper_bin,
+                model=args.model,
+            ),
+            default_speaker=args.speaker_id,
+        )
+        write_model(args.output, transcript, overwrite=args.force)
+        print(
+            f"drafted {len(transcript.utterances)} Mandarin utterances: "
+            f"{args.output}"
+        )
         return
 
     if args.command == "prepare-corpus":

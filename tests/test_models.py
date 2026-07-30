@@ -2,6 +2,8 @@ import pytest
 from pydantic import ValidationError
 
 from fp_multimodel.models import (
+    AsrProvenance,
+    AsrSuggestionSegment,
     Clause,
     LinguisticContext,
     ParticleDetectionProvenance,
@@ -11,6 +13,7 @@ from fp_multimodel.models import (
     SpeakerProfile,
     Transcript,
     TranscriptBatch,
+    TranscriptSuggestion,
     Utterance,
     VideoReference,
 )
@@ -61,6 +64,71 @@ def test_transcript_batch_rejects_duplicate_video_ids() -> None:
         TranscriptBatch(
             project_id="project-1",
             transcripts=[transcript, transcript],
+        )
+
+
+def test_asr_transcript_requires_immutable_suggestion_lineage() -> None:
+    suggestion = TranscriptSuggestion(
+        provenance=AsrProvenance(
+            provider="openai_whisper_cli",
+            model="large-v3",
+            language="zh",
+            task="transcribe",
+            confidence_method="exp_avg_logprob",
+            source_audio_sha256="a" * 64,
+            provider_output_sha256="b" * 64,
+        ),
+        segments=(
+            AsrSuggestionSegment(
+                id="u000001",
+                provider_segment_id="0",
+                start_ms=1000,
+                end_ms=2000,
+                surface_text="你好吗",
+            ),
+        ),
+    )
+    utterance = Utterance(
+        id="u1",
+        start_ms=1000,
+        end_ms=2000,
+        text="你好吗",
+        speaker="spk_unknown",
+        confidence=None,
+        source_segment_ids=["u000001"],
+    )
+
+    transcript = Transcript(
+        video_id="vid1",
+        transcript_origin="asr",
+        asr_suggestion=suggestion,
+        utterances=[utterance],
+    )
+    assert transcript.asr_suggestion is suggestion
+
+    with pytest.raises(ValidationError, match="require the original ASR"):
+        Transcript(
+            video_id="vid1",
+            transcript_origin="asr",
+            utterances=[utterance],
+        )
+    with pytest.raises(ValidationError, match="cannot claim an ASR suggestion"):
+        Transcript(
+            video_id="vid1",
+            transcript_origin="researcher",
+            asr_suggestion=suggestion,
+            utterances=[],
+        )
+    with pytest.raises(ValidationError, match="reference the original ASR"):
+        Transcript(
+            video_id="vid1",
+            transcript_origin="asr",
+            asr_suggestion=suggestion,
+            utterances=[
+                utterance.model_copy(
+                    update={"source_segment_ids": ["missing-segment"]}
+                )
+            ],
         )
 
 

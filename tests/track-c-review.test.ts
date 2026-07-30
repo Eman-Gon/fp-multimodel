@@ -32,9 +32,9 @@ test("seeded clip exposes multimodal meaning fields and honest gating", () => {
   const clip = createDemoClip();
   const summary = summarizeReview(clip);
 
-  assert.equal(summary.total, 16);
-  assert.equal(summary.confirmed, 6);
-  assert.equal(summary.remaining, 10);
+  assert.equal(summary.total, 15);
+  assert.equal(summary.confirmed, 11);
+  assert.equal(summary.remaining, 4);
   assert.equal(summary.ready, false);
   assert.equal(clip.demo_fixture, true);
 });
@@ -65,6 +65,7 @@ test("editing addressee updates the working value but still requires accept", ()
 test("editing one gesture field confirms only that field", () => {
   const clip = createDemoClip();
   const particle = clip.particle_instances[0]!;
+  const originalGestureTimingState = particle.fields.gesture_timing.state;
   const target: FieldTarget = {
     scope: "particle",
     instance_id: particle.instance_id,
@@ -83,7 +84,7 @@ test("editing one gesture field confirms only that field", () => {
   );
   assert.equal(
     edited.particle_instances[0]!.fields.gesture_timing.state,
-    "suggested",
+    originalGestureTimingState,
   );
   assert.equal(edited.fields.addressee_id.state, "suggested");
 });
@@ -205,7 +206,7 @@ test("multi-particle review keys preserve instance pairing", () => {
     )
     .map(({ target }) => targetKey(target));
 
-  assert.equal(units.length, 22);
+  assert.equal(units.length, 21);
   assert.deepEqual(fpTimingKeys, [
     `particle:${first.instance_id}:fp_timing`,
     `particle:${second.instance_id}:fp_timing`,

@@ -11,6 +11,11 @@ from fp_multimodel.manifest import (
     write_media_manifest,
 )
 from fp_multimodel.models import Transcript, Utterance
+from fp_multimodel.models import (
+    AsrProvenance,
+    AsrSuggestionSegment,
+    TranscriptSuggestion,
+)
 
 
 def make_transcript(*, confirmed: bool = True) -> Transcript:
@@ -157,6 +162,51 @@ def test_prepare_corpus_rejects_utterance_past_video_duration(
     with pytest.raises(ValueError, match="extend past the source video duration"):
         prepare_mfa_corpus(
             make_transcript(),
+            audio,
+            tmp_path / "corpus",
+            runner=lambda _command, *, check: None,
+        )
+
+
+def test_prepare_corpus_rejects_asr_suggestion_from_different_audio(
+    tmp_path: Path,
+) -> None:
+    audio = make_verified_audio(tmp_path)
+    reviewed = make_transcript()
+    reviewed = Transcript(
+        video_id=reviewed.video_id,
+        transcript_origin="asr",
+        asr_suggestion=TranscriptSuggestion(
+            provenance=AsrProvenance(
+                provider="openai_whisper_cli",
+                model="large-v3",
+                language="zh",
+                task="transcribe",
+                confidence_method="exp_avg_logprob",
+                source_audio_sha256="f" * 64,
+                provider_output_sha256="e" * 64,
+            ),
+            segments=(
+                AsrSuggestionSegment(
+                    id="source-u1",
+                    provider_segment_id="0",
+                    start_ms=12_400,
+                    end_ms=15_100,
+                    surface_text="你吃饭了吗",
+                    confidence=0.82,
+                ),
+            ),
+        ),
+        utterances=[
+            reviewed.utterances[0].model_copy(
+                update={"source_segment_ids": ["source-u1"]}
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="belongs to different audio"):
+        prepare_mfa_corpus(
+            reviewed,
             audio,
             tmp_path / "corpus",
             runner=lambda _command, *, check: None,

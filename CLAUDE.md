@@ -179,18 +179,68 @@ MFA requires 16kHz mono WAV.
 ### A2. Draft transcription
 Use a Mandarin-capable ASR (Whisper large-v3, or TwelveLabs speech output) to produce a draft transcript with rough utterance segmentation. **This is a draft only** — MFA's alignment is only as accurate as the transcript fed to it, so this output must go through human correction before alignment.
 
-Output shape:
+The runnable adapter invokes the external `openai-whisper` CLI with
+`large-v3`, Mandarin (`zh`), and segment-level JSON output. It binds the run to
+the verified A1 audio hash and source-video duration. Whisper's
+`avg_logprob` is retained as a provider-native diagnostic; the review-priority
+confidence is `exp(avg_logprob)` and that derivation is named in provenance.
+
+The complete original ASR run is an immutable `asr_suggestion`, separate from
+the editable `utterances` working copy. `source_segment_ids` keeps lineage when
+a reviewer splits or merges rough ASR segments. A reviewed transcript must
+never overwrite or delete its original suggestion.
+
+Abbreviated output shape:
 ```json
 {
+  "video_id": "vid03",
+  "transcript_origin": "asr",
+  "asr_suggestion": {
+    "schema_version": 1,
+    "provenance": {
+      "provider": "openai_whisper_cli",
+      "model": "large-v3",
+      "language": "zh",
+      "task": "transcribe",
+      "confidence_method": "exp_avg_logprob",
+      "source_audio_sha256": "...",
+      "provider_output_sha256": "..."
+    },
+    "segments": [
+      {
+        "id": "u000001",
+        "provider_segment_id": "0",
+        "start_ms": 12400,
+        "end_ms": 15100,
+        "surface_text": "你吃飯了嗎",
+        "speaker": null,
+        "confidence": 0.82,
+        "diagnostics": [{"name": "avg_logprob", "value": -0.19845}]
+      }
+    ]
+  },
   "utterances": [
-    { "id": "u1", "start_ms": 12400, "end_ms": 15100,
-      "text": "你吃饭了吗", "speaker": "spkA", "confidence": 0.82 }
+    {
+      "id": "u000001",
+      "start_ms": 12400,
+      "end_ms": 15100,
+      "text": "你吃飯了吗",
+      "surface_text": "你吃飯了嗎",
+      "speaker": "spk_unknown",
+      "confidence": 0.82,
+      "source_segment_ids": ["u000001"],
+      "transcript_confirmed": false
+    }
   ]
 }
 ```
 
 ### A3. Human checkpoint — transcript correction
 Serve utterances to the Transcript Review page (Track C). Reviewer corrects characters, fixes segmentation, marks speaker. On submit, write corrected transcript to `.lab` files (one per utterance) alongside the WAV segments — MFA's expected input layout:
+
+Review edits apply only to the working `utterances`. The frozen
+`asr_suggestion` and its provider/audio provenance remain unchanged, and every
+reviewed utterance retains one or more `source_segment_ids`.
 ```
 corpus/
   spkA/
@@ -357,7 +407,11 @@ Layout:
 Filterable by `fp_token`, `sentence_type`, `speaker`, `clip_status`. **Default sort: ascending AI confidence** — lowest-confidence clips surface first, so human attention goes where the model is least sure.
 
 ### C4. Graph Explorer
-`react-force-graph-2d`, fed from `/api/graph`. Color nodes by label. Click a `Clip` node to jump to its Coding Interface page.
+`react-force-graph-2d`, fed from `/api/graph`. Color nodes by label. Click a
+`Clip` node to jump to its Coding Interface page. The public endpoint exposes
+only allowlisted, parameterized graph views over confirmed data; it never
+accepts arbitrary Cypher. See `docs/neo4j-explorer.md` for the public,
+researcher-MCP, and optional GraphRAG boundaries.
 
 ### C5. Insights
 3–4 hardcoded Cypher queries surfaced as buttons. Do not build a free-text query box — it's slower to build and riskier in a live demo.
@@ -368,13 +422,21 @@ Export: CSV, plus **ELAN-compatible tier export** if time allows. ELAN is the in
 
 ## Neo4j Data Model
 
+The graph storage model and the public visualization projection are separate
+contracts. Public API IDs must be stable domain IDs, never Neo4j internal node
+or relationship IDs. In particular, a source-video-local speaker ID is stored
+with the globally unique key `${video_id}:${speaker_id}` so repeated labels
+such as `spkA` cannot merge speakers across videos.
+
 ### Constraints (run first)
 ```cypher
 CREATE CONSTRAINT video_id IF NOT EXISTS FOR (v:Video) REQUIRE v.id IS UNIQUE;
 CREATE CONSTRAINT clip_id IF NOT EXISTS FOR (c:Clip) REQUIRE c.id IS UNIQUE;
-CREATE CONSTRAINT speaker_id IF NOT EXISTS FOR (s:Speaker) REQUIRE s.id IS UNIQUE;
+CREATE CONSTRAINT speaker_key IF NOT EXISTS FOR (s:Speaker) REQUIRE s.key IS UNIQUE;
 CREATE CONSTRAINT particle_token IF NOT EXISTS FOR (p:Particle) REQUIRE p.token IS UNIQUE;
 CREATE CONSTRAINT stype_label IF NOT EXISTS FOR (st:SentenceType) REQUIRE st.label IS UNIQUE;
+CREATE CONSTRAINT communicative_function_label IF NOT EXISTS
+FOR (cf:CommunicativeFunction) REQUIRE cf.label IS UNIQUE;
 ```
 
 ### Nodes
@@ -383,12 +445,13 @@ Project(id, name)
 Video(id, source, duration_ms, fps)
 Utterance(id, text, start_ms, end_ms, transcript_confirmed: bool)
 Clip(id, name, start_ms, end_ms, status, fp_count)
-Speaker(id, label)
+Speaker(key, id, video_id, label) # key = `${video_id}:${id}`
 ParticipantBackground(participant_id, region, dialect, source, confirmed)
 Particle(token, pinyin)
 Gesture(type, region)          # canonical per type+region combo
 SentenceType(label)
 Tone(contour)
+CommunicativeFunction(label)
 ```
 
 ### Relationships
@@ -406,25 +469,42 @@ Tone(contour)
 (Clip)-[:ACCOMPANIED_BY {
     instance_id, start_ms, end_ms, confidence, source, confirmed
 }]->(Gesture)
-(Clip)-[:CLASSIFIED_AS {confidence, confirmed}]->(SentenceType)
-(Clip)-[:HAS_TONE {confirmed}]->(Tone)
+(Clip)-[:CLASSIFIED_AS {confidence, source, confirmed}]->(SentenceType)
+(Clip)-[:HAS_TONE {confidence, source, confirmed}]->(Tone)
+(Clip)-[:INTERPRETED_AS {
+    suggested_label, suggested_evidence, confidence, source, confirmed,
+    review_action, reviewer_id, reviewed_at, evidence
+}]->(CommunicativeFunction)
 ```
 
 `instance_id` links a specific particle occurrence to its paired gesture within a multi-particle clip.
 `source` on `ACCOMPANIED_BY` records `pegasus` / `mediapipe` / `human`.
-`confirmed` booleans carry provenance — required for the AI-drafts/human-confirms model and for any later reproducibility claim.
+`INTERPRETED_AS` points to the current reviewed communicative function while
+retaining the original model suggestion and evidence on the relationship.
+
+The property lists above are abbreviated, but a `confirmed` boolean alone is
+not sufficient provenance. Every graph-bound model suggestion must retain its
+original value, source, confidence, current reviewed value, review action,
+reviewer, and review timestamp after acceptance or editing. Skipped optional
+values are omitted from the confirmed-corpus projection rather than replaced
+with the model suggestion.
 
 ### Example insight query
 ```cypher
 MATCH (c:Clip {status: 'confirmed'})-[cp:CONTAINS_PARTICLE]->(p:Particle {token: '呢'}),
-      (c)-[:CLASSIFIED_AS]->(st:SentenceType {label: 'content_question'}),
+      (c)-[cs:CLASSIFIED_AS]->(st:SentenceType {label: 'content_question'}),
       (c)-[ab:ACCOMPANIED_BY]->(g:Gesture)
-WHERE cp.instance_id = ab.instance_id
+WHERE cp.confirmed = true
+  AND cs.confirmed = true
+  AND ab.confirmed = true
+  AND cp.instance_id = ab.instance_id
 RETURN g.type, g.region, count(*) AS freq
 ORDER BY freq DESC
 ```
 
-Only ever aggregate over `status: 'confirmed'` clips. Draft data must never appear in an insight.
+Only ever aggregate over `status: 'confirmed'` clips and annotation
+relationships whose values were confirmed. Draft data and unreviewed
+relationship suggestions must never appear in an insight.
 
 ---
 

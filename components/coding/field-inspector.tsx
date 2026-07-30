@@ -9,6 +9,7 @@ import {
   TARGET_PARTICLES,
   TONE_CONTOURS,
 } from "@/lib/vocab.ts";
+import { humanizeCode } from "@/lib/track-c/display.ts";
 import type {
   ClipDetail,
   FieldReview,
@@ -26,13 +27,9 @@ interface FieldInspectorProps {
   readonly particleInstanceId: string;
   readonly activeTarget: FieldTarget;
   readonly summary: ReviewSummary;
-  readonly saveState: "saved" | "saving" | "error";
   readonly liveMessage: string;
   readonly onActivate: (target: FieldTarget) => void;
   readonly onReview: (target: FieldTarget, review: FieldReview) => void;
-  readonly onConfirmClip: () => void;
-  readonly onReturnToQueue: () => void;
-  readonly hasNextClip: boolean;
 }
 
 export function FieldInspector({
@@ -40,13 +37,9 @@ export function FieldInspector({
   particleInstanceId,
   activeTarget,
   summary,
-  saveState,
   liveMessage,
   onActivate,
   onReview,
-  onConfirmClip,
-  onReturnToQueue,
-  hasNextClip,
 }: FieldInspectorProps) {
   const particle =
     clip.particle_instances.find(
@@ -80,18 +73,24 @@ export function FieldInspector({
     });
   const resolved = summary.confirmed + summary.skipped;
   const progress = (resolved / summary.total) * 100;
+  const gestureIsAbsent =
+    particle.fields.gesture_present.state === "confirmed" &&
+    currentValue(particle.fields.gesture_present) === false;
 
   return (
     <aside className="field-inspector" aria-labelledby="fields-heading">
       <header className="field-inspector__header">
         <div>
-          <h2 id="fields-heading">Coding fields</h2>
-          <p title={clip.fixture_note}>Demo clip · suggestions retained</p>
+          <h2 id="fields-heading">Review suggestions</h2>
+          <p title={clip.fixture_note}>
+            {resolved} of {summary.total} reviewed
+            {summary.remaining === 0 ? "" : ` · ${summary.remaining} left`}
+          </p>
         </div>
         <div className="provenance-legend" aria-label="Field provenance legend">
           <span>
             <i className="legend-dot legend-dot--suggested" />
-            AI suggested
+            {clip.demo_fixture ? "Suggested · simulated" : "AI suggested"}
           </span>
           <span>
             <i className="legend-dot legend-dot--confirmed" />
@@ -105,7 +104,10 @@ export function FieldInspector({
         disabled={clip.clip.status === "confirmed"}
         aria-label="Reviewable coding fields"
       >
-        <InspectorSection title="Participants">
+        <InspectorSection
+          title="Participants"
+          fields={[clip.fields.speaker_id, clip.fields.addressee_id]}
+        >
         <FieldRow
           label="Speaker"
           field={clip.fields.speaker_id}
@@ -161,9 +163,12 @@ export function FieldInspector({
         </FieldRow>
         </InspectorSection>
 
-        <InspectorSection title="Particle">
+        <InspectorSection
+          title="Particle"
+          fields={[particle.fields.fp_token, particle.fields.fp_timing]}
+        >
         <FieldRow
-          label="FP token"
+          label="Particle"
           hint={`Surface form ${particle.surface_form}`}
           field={particle.fields.fp_token}
           target={particleTarget("fp_token")}
@@ -190,7 +195,7 @@ export function FieldInspector({
           </select>
         </FieldRow>
         <FieldRow
-          label="FP count"
+          label="Particle count"
           hint="Derived from instances"
           field={clip.fields.fp_count}
           target={clipTarget("fp_count")}
@@ -204,7 +209,7 @@ export function FieldInspector({
           </output>
         </FieldRow>
         <FieldRow
-          label="FP timing"
+          label="Particle timing"
           hint="Absolute source time"
           field={particle.fields.fp_timing}
           target={particleTarget("fp_timing")}
@@ -219,7 +224,15 @@ export function FieldInspector({
         </FieldRow>
         </InspectorSection>
 
-        <InspectorSection title="Gesture">
+        <InspectorSection
+          title="Gesture"
+          fields={[
+            particle.fields.gesture_present,
+            particle.fields.gesture_type,
+            particle.fields.gesture_region,
+            particle.fields.gesture_timing,
+          ]}
+        >
         <FieldRow
           label="Gesture present"
           field={particle.fields.gesture_present}
@@ -254,6 +267,12 @@ export function FieldInspector({
             </span>
           </button>
         </FieldRow>
+        {gestureIsAbsent ? (
+          <p className="gesture-not-applicable">
+            Gesture type, region, and timing are not applicable.
+          </p>
+        ) : (
+          <>
         <FieldRow
           label="Gesture type"
           field={particle.fields.gesture_type}
@@ -275,7 +294,7 @@ export function FieldInspector({
           >
             {GESTURE_TYPES.map((gestureType) => (
               <option value={gestureType} key={gestureType}>
-                {humanize(gestureType)}
+              {humanizeCode(gestureType)}
               </option>
             ))}
           </select>
@@ -304,7 +323,7 @@ export function FieldInspector({
             </option>
             {GESTURE_REGIONS.map((region) => (
               <option value={region} key={region}>
-                {humanize(region)}
+                {humanizeCode(region)}
               </option>
             ))}
           </select>
@@ -323,9 +342,14 @@ export function FieldInspector({
             {formatRangeField(particle.fields.gesture_timing)}
           </output>
         </FieldRow>
+          </>
+        )}
         </InspectorSection>
 
-        <InspectorSection title="Utterance">
+        <InspectorSection
+          title="Utterance"
+          fields={[clip.fields.sentence_type, clip.fields.tone_contour]}
+        >
         <FieldRow
           label="Sentence type"
           field={clip.fields.sentence_type}
@@ -347,7 +371,7 @@ export function FieldInspector({
           >
             {SENTENCE_TYPES.map((sentenceType) => (
               <option value={sentenceType} key={sentenceType}>
-                {humanize(sentenceType)}
+                {humanizeCode(sentenceType)}
               </option>
             ))}
           </select>
@@ -373,14 +397,22 @@ export function FieldInspector({
           >
             {TONE_CONTOURS.map((tone) => (
               <option value={tone} key={tone}>
-                {humanize(tone)}
+                {humanizeCode(tone)}
               </option>
             ))}
           </select>
         </FieldRow>
         </InspectorSection>
 
-        <InspectorSection title="Meaning">
+        <InspectorSection
+          title="Meaning"
+          fields={[
+            clip.fields.discourse_context,
+            clip.fields.clauses,
+            clip.fields.communicative_function,
+            clip.fields.meaning_explanation,
+          ]}
+        >
           <FieldRow
             label="Discourse context"
             hint="Edit for local context"
@@ -480,7 +512,7 @@ export function FieldInspector({
                   value={communicativeFunction}
                   key={communicativeFunction}
                 >
-                  {humanize(communicativeFunction)}
+                  {humanizeCode(communicativeFunction)}
                 </option>
               ))}
             </select>
@@ -522,12 +554,8 @@ export function FieldInspector({
           <span>
             {resolved} of {summary.total} fields reviewed
           </span>
-          <span className={`save-state save-state--${saveState}`}>
-            {saveState === "saving"
-              ? "Saving…"
-              : saveState === "error"
-                ? "Save failed"
-                : "Saved"}
+          <span>
+            {summary.remaining === 0 ? "Ready" : `${summary.remaining} left`}
           </span>
         </div>
         <div
@@ -550,50 +578,33 @@ export function FieldInspector({
             {liveMessage}
           </p>
         ) : null}
-        <div className="keyboard-hints" aria-label="Keyboard shortcuts">
-          <span>
-            <kbd>C</kbd> confirm field
-          </span>
-          <span>
-            <kbd>S</kbd> skip
-          </span>
-          <span>
-            <kbd>Q</kbd> queue
-          </span>
-          <span>
-            <kbd>N</kbd> next clip
-          </span>
-          <span>
-            <kbd>,</kbd>
-            <kbd>.</kbd> step frame
-          </span>
-        </div>
-        {clip.clip.status === "confirmed" ? (
-          <button
-            type="button"
-            className="button button--confirm"
-            onClick={onReturnToQueue}
-          >
-            {hasNextClip ? "Next review clip" : "Return to cleared queue"}
-          </button>
-        ) : (
-          <button
-            type="button"
-            className={`button button--confirm${summary.ready ? "" : " button--disabled"}`}
-            aria-disabled={!summary.ready || saveState === "saving"}
-            onClick={onConfirmClip}
-          >
-            Confirm clip
-          </button>
-        )}
+        <details className="keyboard-shortcuts">
+          <summary>Keyboard shortcuts</summary>
+          <div className="keyboard-hints" aria-label="Keyboard shortcuts">
+            <span>
+              <kbd>C</kbd> confirm field
+            </span>
+            <span>
+              <kbd>S</kbd> skip
+            </span>
+            <span>
+              <kbd>Q</kbd> queue
+            </span>
+            <span>
+              <kbd>N</kbd> next clip
+            </span>
+            <span>
+              <kbd>,</kbd>
+              <kbd>.</kbd> step frame
+            </span>
+          </div>
+        </details>
         <p>
           {clip.clip.status === "confirmed"
-            ? "Confirmed coding is now read-only."
+            ? "Confirmed coding is read-only."
             : summary.ready
-            ? summary.skipped > 0
-              ? `${summary.skipped} skipped field${summary.skipped === 1 ? "" : "s"} will remain explicit.`
-              : "Every field has a human decision."
-            : `Confirm or skip ${summary.remaining} remaining field${summary.remaining === 1 ? "" : "s"} to continue.`}
+              ? "Every reviewable field has a human decision. Confirm the clip in the header."
+              : `Confirm or skip ${summary.remaining} remaining field${summary.remaining === 1 ? "" : "s"}.`}
         </p>
       </footer>
     </aside>
@@ -602,13 +613,22 @@ export function FieldInspector({
 
 function InspectorSection({
   title,
+  fields,
   children,
-}: Readonly<{ title: string; children: React.ReactNode }>) {
+}: Readonly<{
+  title: string;
+  fields: readonly ReviewField<unknown>[];
+  children: React.ReactNode;
+}>) {
+  const remaining = fields.filter(({ state }) => state === "suggested").length;
   return (
-    <section className="inspector-section">
-      <h3>{title}</h3>
-      {children}
-    </section>
+    <details className="inspector-section" defaultOpen={remaining > 0}>
+      <summary>
+        <span>{title}</span>
+        <small>{remaining === 0 ? "Reviewed" : `${remaining} left`}</small>
+      </summary>
+      <div>{children}</div>
+    </details>
   );
 }
 
@@ -616,15 +636,10 @@ function currentValue<T>(field: ReviewField<T>): T {
   return field.value ?? field.suggestion.value;
 }
 
-function formatRangeField(field: ReviewField<TimeRange | null>): string {
-  const range = currentValue(field);
-  if (range === null) {
-    return "No boundary suggested";
+function formatRangeField(field: ReviewField<TimeRange>): string {
+  if (field.state === "skipped") {
+    return "Not applicable";
   }
+  const range = currentValue(field);
   return formatSourceRange(range.start_ms, range.end_ms);
-}
-
-function humanize(value: string): string {
-  const words = value.replaceAll("_", " ");
-  return words.charAt(0).toUpperCase() + words.slice(1);
 }

@@ -1,11 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Check, Minus, SkipForward } from "lucide-react";
+import { Check, Minus } from "lucide-react";
 import type {
   FieldTarget,
   ReviewField,
 } from "@/lib/track-c/types.ts";
+import { humanizeCode } from "@/lib/track-c/display.ts";
 import { targetKey } from "@/lib/track-c/review.ts";
 
 interface FieldRowProps {
@@ -39,7 +40,7 @@ export function FieldRow({
       : Math.round(field.suggestion.confidence * 100);
   const wasEdited =
     field.state === "confirmed" && field.review?.action === "edited";
-  const suggestionSource = humanize(field.suggestion.source);
+  const suggestionSource = humanizeCode(field.suggestion.source);
   const statusLabel =
     field.state === "suggested"
       ? `${suggestionSource} suggested${confidence === null ? "" : `, ${confidence}% confidence`}`
@@ -67,61 +68,60 @@ export function FieldRow({
         <span>{label}</span>
         {hint === undefined ? null : <small>{hint}</small>}
       </div>
-      <button
-        type="button"
-        className={`provenance provenance--${field.state}`}
-        onClick={(event) => {
-          event.stopPropagation();
-          onAccept(target);
-        }}
-        aria-label={
-          field.state === "skipped"
-            ? `Restore and confirm ${label}`
-            : field.state === "confirmed"
-              ? `${label} is confirmed`
-              : `Confirm ${label}`
-        }
-        disabled={field.state === "confirmed"}
-        title={statusLabel}
-      >
-        {field.state === "confirmed" ? (
-          <Check aria-hidden="true" />
-        ) : field.state === "skipped" ? (
-          <Minus aria-hidden="true" />
-        ) : (
-          <Check className="provenance__confirm-hint" aria-hidden="true" />
-        )}
-        <span className="visually-hidden">{statusLabel}</span>
-      </button>
       <div className="field-row__control">{children}</div>
-      <div className="field-row__meta" aria-hidden="true">
+      <div className={`field-row__meta field-row__meta--${field.state}`}>
         {field.state === "suggested" && confidence !== null ? (
-          <span>{confidence}%</span>
+          <span title={statusLabel}>{confidence}%</span>
         ) : field.state === "confirmed" ? (
-          <span>{wasEdited ? "Edited" : "Done"}</span>
+          <span title={statusLabel}>
+            <Check aria-hidden="true" />
+            {wasEdited ? "Edited" : "Confirmed"}
+          </span>
         ) : (
-          <span>Skipped</span>
+          <span title={statusLabel}>
+            <Minus aria-hidden="true" />
+            Skipped
+          </span>
         )}
       </div>
-      {field.state === "suggested" ? (
-        <button
-          type="button"
-          className="field-row__skip"
-          onClick={(event) => {
-            event.stopPropagation();
-            onSkip(target);
-          }}
-          aria-label={`Skip ${label}`}
-          title={`Skip ${label}`}
-        >
-          <SkipForward aria-hidden="true" />
-        </button>
-      ) : null}
+      <div className="field-row__actions">
+        {field.state === "suggested" ? (
+          <>
+            <button
+              type="button"
+              className="field-row__confirm"
+              onClick={(event) => {
+                event.stopPropagation();
+                onAccept(target);
+              }}
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              className="field-row__skip"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSkip(target);
+              }}
+            >
+              Skip
+            </button>
+          </>
+        ) : field.state === "skipped" ? (
+          <button
+            type="button"
+            className="field-row__confirm"
+            onClick={(event) => {
+              event.stopPropagation();
+              onAccept(target);
+            }}
+          >
+            Restore
+          </button>
+        ) : null}
+      </div>
+      <span className="visually-hidden">{statusLabel}</span>
     </div>
   );
-}
-
-function humanize(value: string): string {
-  const words = value.replaceAll("_", " ");
-  return words.charAt(0).toUpperCase() + words.slice(1);
 }

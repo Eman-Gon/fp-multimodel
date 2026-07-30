@@ -120,6 +120,15 @@ def prepare_mfa_corpus(
             "source audio does not match its media manifest; normalize or "
             "select the correct video before preparing the corpus"
         )
+    if (
+        transcript.asr_suggestion is not None
+        and transcript.asr_suggestion.provenance.source_audio_sha256
+        != source_audio_sha256
+    ):
+        raise ValueError(
+            "transcript ASR suggestion belongs to different audio; transcribe "
+            "the selected video again before preparing the corpus"
+        )
     out_of_bounds = [
         utterance.id
         for utterance in transcript.utterances

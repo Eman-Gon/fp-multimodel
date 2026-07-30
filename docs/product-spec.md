@@ -147,6 +147,18 @@ forced alignment. Alignment must refuse unconfirmed transcripts. A transcript
 revision invalidates older alignment output so stale word timings cannot enter
 the corpus.
 
+ASR-origin transcripts store two separate records:
+
+- a frozen original suggestion containing every provider segment, its exact
+  proposed surface text and timing, confidence/diagnostics, provider/model
+  identity, and hashes for both the verified audio and raw provider output
+- an editable working transcript used for human correction and alignment
+
+Working utterances retain `source_segment_ids` pointing back to one or more
+original ASR segments. This lineage must survive text edits, retiming,
+speaker correction, and segmentation splits or merges. The original suggestion
+is never replaced by the reviewed value.
+
 The corrected transcript provides evidence for particle detection and sentence
 type. Video and audio provide evidence for gesture and tone. Participant
 identity, addressee, discourse context, clause boundaries, and communicative
