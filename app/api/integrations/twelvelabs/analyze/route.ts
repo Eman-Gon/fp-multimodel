@@ -3,6 +3,10 @@ import { draftTrackBAnnotations } from "@/lib/track-b/pipeline.ts";
 import { validateTrackAParticle } from "@/lib/track-b/track-a-handoff.ts";
 import { TwelveLabsError } from "@/lib/twelvelabs/errors.ts";
 import { TWELVELABS_MODEL } from "@/lib/twelvelabs/config.ts";
+import type {
+  TwelveLabsAnalyzeData,
+  TwelveLabsAnalyzeRequest,
+} from "@/lib/twelvelabs/contracts.ts";
 import {
   createTwelveLabsClient,
   integrationErrorResponse,
@@ -16,13 +20,6 @@ import { TwelveLabsSemanticGestureAnalyzer } from "@/lib/twelvelabs/semantic-ana
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-interface AnalyzeCommand {
-  readonly video_id: string;
-  readonly asset_id: string;
-  readonly video_duration_ms: number;
-  readonly particle: FinalParticleInstance;
-}
 
 export async function POST(request: Request): Promise<Response> {
   const parsed = await parseCommand(request);
@@ -47,6 +44,29 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const client = createTwelveLabsClient();
+    const asset = await client.retrieveAsset(parsed.asset_id);
+    if (asset.video_id === null) {
+      throw new TwelveLabsError(
+        "TWELVELABS_INVALID_RESPONSE",
+        "TwelveLabs did not return the asset video_id metadata.",
+        502,
+      );
+    }
+    if (asset.video_id !== parsed.video_id) {
+      throw new TwelveLabsError(
+        "TWELVELABS_INVALID_REQUEST",
+        "The TwelveLabs asset belongs to a different video_id.",
+        400,
+      );
+    }
+    if (asset.status !== "ready") {
+      throw new TwelveLabsError(
+        "TWELVELABS_INVALID_REQUEST",
+        "The TwelveLabs asset is not ready for analysis.",
+        409,
+        asset.status === "processing",
+      );
+    }
     const semanticAnalyzer = new TwelveLabsSemanticGestureAnalyzer({
       client,
       resolveVideo(videoId) {
@@ -101,22 +121,26 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    return jsonData({
+    const data = {
       provider: "twelvelabs",
       model: TWELVELABS_MODEL,
       video_id: parsed.video_id,
       instance_id: parsed.particle.instance_id,
       asset_id: parsed.asset_id,
       annotation,
-    });
+    } satisfies TwelveLabsAnalyzeData;
+    return jsonData(data);
   } catch (error) {
-    return integrationErrorResponse(error);
+    return integrationErrorResponse(error, {
+      video_id: parsed.video_id,
+      instance_id: parsed.particle.instance_id,
+    });
   }
 }
 
 async function parseCommand(
   request: Request,
-): Promise<AnalyzeCommand | Response> {
+): Promise<TwelveLabsAnalyzeRequest | Response> {
   let value: unknown;
   try {
     value = await request.json();
@@ -162,4 +186,3 @@ async function parseCommand(
     particle: value.particle as unknown as FinalParticleInstance,
   };
 }
-

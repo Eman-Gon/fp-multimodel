@@ -14,6 +14,7 @@ export type TwelveLabsIndexedAssetStatus =
 
 export interface TwelveLabsAsset {
   readonly id: string;
+  readonly video_id: string | null;
   readonly status: TwelveLabsAssetStatus;
   readonly filename: string | null;
   readonly file_type: string | null;
@@ -22,6 +23,7 @@ export interface TwelveLabsAsset {
 export interface TwelveLabsIndexedAsset {
   readonly id: string;
   readonly asset_id: string;
+  readonly video_id: string | null;
   readonly status: TwelveLabsIndexedAssetStatus;
 }
 
@@ -81,7 +83,7 @@ export class TwelveLabsClient {
         503,
       );
     }
-    this.#apiKey = options.apiKey;
+    this.#apiKey = options.apiKey.trim();
     this.#baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -102,7 +104,7 @@ export class TwelveLabsClient {
       method: "POST",
       body: form,
     });
-    return parseAsset(raw);
+    return bindAssetToVideo(parseAsset(raw), request.video_id);
   }
 
   async createAssetFromFile(
@@ -130,7 +132,7 @@ export class TwelveLabsClient {
       method: "POST",
       body: form,
     });
-    return parseAsset(raw);
+    return bindAssetToVideo(parseAsset(raw), request.video_id);
   }
 
   async retrieveAsset(assetId: string): Promise<TwelveLabsAsset> {
@@ -171,7 +173,10 @@ export class TwelveLabsClient {
         "TwelveLabs returned an indexed asset for a different source asset.",
       );
     }
-    return { ...value, status: "queued" };
+    return {
+      ...bindIndexedAssetToVideo(value, request.video_id),
+      status: "queued",
+    };
   }
 
   async retrieveIndexedAsset(
@@ -184,7 +189,13 @@ export class TwelveLabsClient {
       `/indexes/${encodeURIComponent(indexId)}/indexed-assets/${encodeURIComponent(indexedAssetId)}`,
       { method: "GET" },
     );
-    return parseIndexedAsset(raw);
+    const indexedAsset = parseIndexedAsset(raw);
+    if (indexedAsset.id !== indexedAssetId) {
+      throw invalidProviderResponse(
+        "TwelveLabs returned an indexed asset with a mismatched identifier.",
+      );
+    }
+    return indexedAsset;
   }
 
   async analyzeStructured(
@@ -234,12 +245,21 @@ export class TwelveLabsClient {
     });
 
     const value = asRecord(raw, "TwelveLabs analysis response");
-    const data = readString(value, "data");
+    const id = redactSecret(readNullableString(value, "id"), this.#apiKey);
+    const data = redactSecret(readString(value, "data"), this.#apiKey);
+    const finishReason = redactSecret(
+      readNullableString(value, "finish_reason"),
+      this.#apiKey,
+    );
     return {
-      id: readNullableString(value, "id"),
+      id,
       data,
-      finish_reason: readNullableString(value, "finish_reason"),
-      raw_response: structuredClone(raw),
+      finish_reason: finishReason,
+      raw_response: {
+        id,
+        data,
+        finish_reason: finishReason,
+      },
     };
   }
 
@@ -249,14 +269,20 @@ export class TwelveLabsClient {
     const headers = new Headers(init.headers);
     headers.set("x-api-key", this.#apiKey);
 
-    let response: Response;
     try {
-      response = await this.#fetch(`${this.#baseUrl}${path}`, {
+      const response = await this.#fetch(`${this.#baseUrl}${path}`, {
         ...init,
         headers,
         signal: controller.signal,
       });
-    } catch {
+      if (!response.ok) {
+        throw providerErrorForStatus(response.status);
+      }
+      return await readResponseBody(response, controller.signal);
+    } catch (error) {
+      if (error instanceof TwelveLabsError) {
+        throw error;
+      }
       if (controller.signal.aborted) {
         throw new TwelveLabsError(
           "TWELVELABS_TIMEOUT",
@@ -274,11 +300,6 @@ export class TwelveLabsClient {
     } finally {
       clearTimeout(timeout);
     }
-
-    if (!response.ok) {
-      throw providerErrorForStatus(response.status);
-    }
-    return readResponseBody(response);
   }
 }
 
@@ -308,6 +329,7 @@ function parseAsset(raw: unknown): TwelveLabsAsset {
   }
   return {
     id: readString(value, "_id"),
+    video_id: readVideoIdMetadata(value),
     status,
     filename: readNullableString(value, "filename"),
     file_type: readNullableString(value, "file_type"),
@@ -316,11 +338,12 @@ function parseAsset(raw: unknown): TwelveLabsAsset {
 
 function parseIndexedAssetIdentity(
   raw: unknown,
-): Pick<TwelveLabsIndexedAsset, "id" | "asset_id"> {
+): Pick<TwelveLabsIndexedAsset, "id" | "asset_id" | "video_id"> {
   const value = asRecord(raw, "TwelveLabs indexed asset response");
   return {
     id: readString(value, "_id"),
     asset_id: readString(value, "asset_id"),
+    video_id: readVideoIdMetadata(value),
   };
 }
 
@@ -369,8 +392,20 @@ function readNullableString(
   return field;
 }
 
-async function readResponseBody(response: Response): Promise<unknown> {
-  const text = await response.text();
+async function readResponseBody(
+  response: Response,
+  signal: AbortSignal,
+): Promise<unknown> {
+  const text = await Promise.race([
+    response.text(),
+    new Promise<never>((_resolve, reject) => {
+      signal.addEventListener(
+        "abort",
+        () => reject(new DOMException("Request timed out.", "AbortError")),
+        { once: true },
+      );
+    }),
+  ]);
   if (text.length === 0) {
     return {};
   }
@@ -420,6 +455,71 @@ function invalidProviderResponse(message: string): TwelveLabsError {
     message,
     502,
   );
+}
+
+function bindAssetToVideo(
+  asset: TwelveLabsAsset,
+  videoId: string,
+): TwelveLabsAsset {
+  if (asset.video_id !== null && asset.video_id !== videoId) {
+    throw invalidProviderResponse(
+      "TwelveLabs returned an asset for a different video_id.",
+    );
+  }
+  return { ...asset, video_id: videoId };
+}
+
+function bindIndexedAssetToVideo(
+  asset: Pick<TwelveLabsIndexedAsset, "id" | "asset_id" | "video_id">,
+  videoId: string,
+): Pick<TwelveLabsIndexedAsset, "id" | "asset_id" | "video_id"> {
+  if (asset.video_id !== null && asset.video_id !== videoId) {
+    throw invalidProviderResponse(
+      "TwelveLabs returned an indexed asset for a different video_id.",
+    );
+  }
+  return { ...asset, video_id: videoId };
+}
+
+function readVideoIdMetadata(value: Record<string, unknown>): string | null {
+  let metadata = value.user_metadata;
+  if (typeof metadata === "string") {
+    try {
+      metadata = JSON.parse(metadata) as unknown;
+    } catch {
+      throw invalidProviderResponse(
+        "TwelveLabs returned invalid user_metadata.",
+      );
+    }
+  }
+  if (metadata === undefined || metadata === null) {
+    return null;
+  }
+  if (typeof metadata !== "object" || Array.isArray(metadata)) {
+    throw invalidProviderResponse(
+      "TwelveLabs returned invalid user_metadata.",
+    );
+  }
+  const videoId = (metadata as Record<string, unknown>).video_id;
+  if (videoId === undefined || videoId === null) {
+    return null;
+  }
+  if (typeof videoId !== "string" || videoId.trim().length === 0) {
+    throw invalidProviderResponse(
+      "TwelveLabs returned invalid video_id metadata.",
+    );
+  }
+  return videoId;
+}
+
+function redactSecret<T extends string | null>(
+  value: T,
+  secret: string,
+): T {
+  if (value === null || !value.includes(secret)) {
+    return value;
+  }
+  return value.replaceAll(secret, "[REDACTED]") as T;
 }
 
 function assertNonEmpty(value: string, label: string): void {

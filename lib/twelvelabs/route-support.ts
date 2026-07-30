@@ -1,5 +1,6 @@
 import { TwelveLabsClient } from "./client.ts";
 import { readTwelveLabsConfig } from "./config.ts";
+import type { ApiErrorDetails } from "./contracts.ts";
 import { TwelveLabsError } from "./errors.ts";
 
 export const NO_STORE_HEADERS = {
@@ -26,16 +27,21 @@ export function jsonData(
   );
 }
 
-export function integrationErrorResponse(error: unknown): Response {
+export function integrationErrorResponse(
+  error: unknown,
+  context: Pick<ApiErrorDetails, "video_id" | "instance_id"> = {},
+): Response {
   if (error instanceof TwelveLabsError) {
     return errorResponse(error.httpStatus, error.code, error.message, {
       retryable: error.retryable,
+      ...context,
     });
   }
   return errorResponse(
     500,
     "INTEGRATION_ERROR",
     "The TwelveLabs integration could not complete the request.",
+    context,
   );
 }
 
@@ -88,4 +94,3 @@ function headersToObject(
   }
   return Object.fromEntries(new Headers(headers).entries());
 }
-

@@ -2,6 +2,13 @@ import type {
   TwelveLabsAsset,
   TwelveLabsIndexedAsset,
 } from "@/lib/twelvelabs/client.ts";
+import type {
+  TwelveLabsCreateIndexRequest,
+  TwelveLabsIndexData,
+  TwelveLabsIndexRequest,
+  TwelveLabsIndexStatusRequest,
+  TwelveLabsUploadUrlRequest,
+} from "@/lib/twelvelabs/contracts.ts";
 import { TwelveLabsError } from "@/lib/twelvelabs/errors.ts";
 import {
   createTwelveLabsClient,
@@ -18,14 +25,6 @@ export const runtime = "nodejs";
 
 const MAX_DIRECT_UPLOAD_BYTES = 200 * 1024 * 1024;
 
-interface UploadUrlCommand {
-  readonly action: "upload";
-  readonly video_id: string;
-  readonly index_id: string;
-  readonly video_url: string;
-  readonly filename?: string;
-}
-
 interface UploadFileCommand {
   readonly action: "upload";
   readonly video_id: string;
@@ -34,26 +33,7 @@ interface UploadFileCommand {
   readonly filename?: string;
 }
 
-interface IndexCommand {
-  readonly action: "index";
-  readonly video_id: string;
-  readonly index_id: string;
-  readonly asset_id: string;
-}
-
-interface StatusCommand {
-  readonly action: "status";
-  readonly video_id: string;
-  readonly index_id: string;
-  readonly asset_id: string;
-  readonly indexed_asset_id?: string;
-}
-
-type IndexRouteCommand =
-  | UploadUrlCommand
-  | UploadFileCommand
-  | IndexCommand
-  | StatusCommand;
+type IndexRouteCommand = TwelveLabsIndexRequest | UploadFileCommand;
 
 export async function POST(request: Request): Promise<Response> {
   const parsed = await parseCommand(request);
@@ -85,6 +65,7 @@ export async function POST(request: Request): Promise<Response> {
       }
       case "index": {
         const asset = await client.retrieveAsset(parsed.asset_id);
+        assertVideoBinding(asset.video_id, parsed.video_id, "asset");
         if (asset.status !== "ready") {
           return uploadResponse(parsed, asset);
         }
@@ -94,6 +75,7 @@ export async function POST(request: Request): Promise<Response> {
       case "status": {
         if (parsed.indexed_asset_id === undefined) {
           const asset = await client.retrieveAsset(parsed.asset_id);
+          assertVideoBinding(asset.video_id, parsed.video_id, "asset");
           return uploadResponse(parsed, asset);
         }
         const indexedAsset = await client.retrieveIndexedAsset(
@@ -107,11 +89,16 @@ export async function POST(request: Request): Promise<Response> {
             502,
           );
         }
+        assertVideoBinding(
+          indexedAsset.video_id,
+          parsed.video_id,
+          "indexed asset",
+        );
         return indexingResponse(parsed, indexedAsset);
       }
     }
   } catch (error) {
-    return integrationErrorResponse(error);
+    return integrationErrorResponse(error, { video_id: parsed.video_id });
   }
 }
 
@@ -173,7 +160,7 @@ async function parseCommand(
       ...common,
       video_url: videoUrl,
       ...(filename === undefined ? {} : { filename }),
-    };
+    } satisfies TwelveLabsUploadUrlRequest;
   }
 
   const assetId = readRequiredString(value, "asset_id");
@@ -183,7 +170,11 @@ async function parseCommand(
     );
   }
   if (inferredAction === "index") {
-    return { action: "index", ...common, asset_id: assetId };
+    return {
+      action: "index",
+      ...common,
+      asset_id: assetId,
+    } satisfies TwelveLabsCreateIndexRequest;
   }
 
   const indexedAssetId = readOptionalString(value, "indexed_asset_id");
@@ -197,7 +188,7 @@ async function parseCommand(
     ...(indexedAssetId === undefined
       ? {}
       : { indexed_asset_id: indexedAssetId }),
-  };
+  } satisfies TwelveLabsIndexStatusRequest;
 }
 
 async function parseMultipartCommand(
@@ -246,7 +237,7 @@ async function parseMultipartCommand(
 
 function parseCommonFields(
   value: Record<string, unknown>,
-): Pick<IndexCommand, "video_id" | "index_id"> | Response {
+): Pick<TwelveLabsCreateIndexRequest, "video_id" | "index_id"> | Response {
   const videoId = readRequiredString(value, "video_id");
   const indexId = readRequiredString(value, "index_id");
   if (videoId === null || indexId === null) {
@@ -291,16 +282,17 @@ function uploadResponse(
   asset: TwelveLabsAsset,
 ): Response {
   const status = asset.status === "ready" ? "ready" : asset.status;
+  const data = {
+    provider: "twelvelabs",
+    video_id: command.video_id,
+    index_id: command.index_id,
+    asset_id: asset.id,
+    indexed_asset_id: null,
+    stage: "upload",
+    status,
+  } satisfies TwelveLabsIndexData;
   return jsonData(
-    {
-      provider: "twelvelabs",
-      video_id: command.video_id,
-      index_id: command.index_id,
-      asset_id: asset.id,
-      indexed_asset_id: null,
-      stage: "upload",
-      status,
-    },
+    data,
     { status: asset.status === "processing" ? 202 : 200 },
   );
 }
@@ -314,16 +306,38 @@ function indexingResponse(
     indexedAsset.status === "ready" || indexedAsset.status === "failed"
       ? indexedAsset.status
       : "processing";
+  const data = {
+    provider: "twelvelabs",
+    video_id: command.video_id,
+    index_id: command.index_id,
+    asset_id: indexedAsset.asset_id,
+    indexed_asset_id: indexedAsset.id,
+    stage: "index",
+    status,
+  } satisfies TwelveLabsIndexData;
   return jsonData(
-    {
-      provider: "twelvelabs",
-      video_id: command.video_id,
-      index_id: command.index_id,
-      asset_id: indexedAsset.asset_id,
-      indexed_asset_id: indexedAsset.id,
-      stage: "index",
-      status,
-    },
+    data,
     { status: status === "processing" ? 202 : httpStatus },
   );
+}
+
+function assertVideoBinding(
+  providerVideoId: string | null,
+  requestedVideoId: string,
+  resource: string,
+): void {
+  if (providerVideoId === null) {
+    throw new TwelveLabsError(
+      "TWELVELABS_INVALID_RESPONSE",
+      `TwelveLabs did not return the ${resource} video_id metadata.`,
+      502,
+    );
+  }
+  if (providerVideoId !== requestedVideoId) {
+    throw new TwelveLabsError(
+      "TWELVELABS_INVALID_REQUEST",
+      `The TwelveLabs ${resource} belongs to a different video_id.`,
+      400,
+    );
+  }
 }
