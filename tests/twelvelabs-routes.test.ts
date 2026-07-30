@@ -137,6 +137,141 @@ test("index action waits for a ready asset and starts separate indexing", async 
   );
 });
 
+test("index status polling normalizes every provider state without losing IDs", async (t) => {
+  const restoreEnvironment = setApiKey("server-secret");
+  t.after(restoreEnvironment);
+  const cases = [
+    ["pending", 202, "processing"],
+    ["queued", 202, "processing"],
+    ["indexing", 202, "processing"],
+    ["ready", 200, "ready"],
+    ["failed", 200, "failed"],
+  ] as const;
+
+  for (const [providerStatus, expectedHttpStatus, expectedStatus] of cases) {
+    const restoreFetch = setFetch(async () =>
+      jsonResponse({
+        _id: "indexed-456",
+        asset_id: "asset-123",
+        status: providerStatus,
+        user_metadata: { video_id: "vid-03" },
+      }),
+    );
+    try {
+      const response = await indexVideo(
+        jsonRequest("/api/integrations/twelvelabs/index", {
+          action: "status",
+          video_id: "vid-03",
+          index_id: "index-789",
+          asset_id: "asset-123",
+          indexed_asset_id: "indexed-456",
+        }),
+      );
+      const body = await response.json();
+
+      assert.equal(response.status, expectedHttpStatus);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      assert.deepEqual(body.data, {
+        provider: "twelvelabs",
+        video_id: "vid-03",
+        index_id: "index-789",
+        asset_id: "asset-123",
+        indexed_asset_id: "indexed-456",
+        stage: "index",
+        status: expectedStatus,
+      });
+    } finally {
+      restoreFetch();
+    }
+  }
+});
+
+test("index failures are sanitized, retryable when appropriate, and video-scoped", async (t) => {
+  const secret = "route-failure-secret";
+  const restoreEnvironment = setApiKey(secret);
+  t.after(restoreEnvironment);
+
+  const restoreRateLimitedFetch = setFetch(async () =>
+    jsonResponse({ diagnostic: `echoed ${secret}` }, 429),
+  );
+  const rateLimited = await indexVideo(
+    jsonRequest("/api/integrations/twelvelabs/index", {
+      action: "upload",
+      video_id: "vid-03",
+      index_id: "index-789",
+      video_url: "https://media.example/source.mp4",
+    }),
+  );
+  const rateLimitedBody = await rateLimited.json();
+  restoreRateLimitedFetch();
+
+  assert.equal(rateLimited.status, 503);
+  assert.equal(rateLimitedBody.error.code, "TWELVELABS_RATE_LIMITED");
+  assert.deepEqual(rateLimitedBody.error.details, {
+    retryable: true,
+    video_id: "vid-03",
+  });
+  assert.equal(JSON.stringify(rateLimitedBody).includes(secret), false);
+
+  const restoreNetworkFetch = setFetch(async () => {
+    throw new TypeError("network unavailable");
+  });
+  const unavailable = await indexVideo(
+    jsonRequest("/api/integrations/twelvelabs/index", {
+      action: "upload",
+      video_id: "vid-04",
+      index_id: "index-789",
+      video_url: "https://media.example/source.mp4",
+    }),
+  );
+  const unavailableBody = await unavailable.json();
+  restoreNetworkFetch();
+
+  assert.equal(unavailable.status, 503);
+  assert.equal(unavailableBody.error.code, "TWELVELABS_UNAVAILABLE");
+  assert.deepEqual(unavailableBody.error.details, {
+    retryable: true,
+    video_id: "vid-04",
+  });
+});
+
+test("unconfigured routes return safe, non-retryable scoped errors", async (t) => {
+  const restoreEnvironment = setApiKey(undefined);
+  t.after(restoreEnvironment);
+
+  const indexResponse = await indexVideo(
+    jsonRequest("/api/integrations/twelvelabs/index", {
+      action: "upload",
+      video_id: "vid-03",
+      index_id: "index-789",
+      video_url: "https://media.example/source.mp4",
+    }),
+  );
+  const indexBody = await indexResponse.json();
+  assert.equal(indexResponse.status, 503);
+  assert.deepEqual(indexBody.error.details, {
+    retryable: false,
+    video_id: "vid-03",
+  });
+
+  const analyzeResponse = await analyze(
+    jsonRequest("/api/integrations/twelvelabs/analyze", {
+      video_id: "vid-03",
+      instance_id: "vid-03:u1",
+      asset_id: "asset-123",
+      video_duration_ms: 12_000,
+      particle: trackAParticle,
+    }),
+  );
+  const analyzeBody = await analyzeResponse.json();
+  assert.equal(analyzeResponse.status, 503);
+  assert.deepEqual(analyzeBody.error.details, {
+    retryable: false,
+    video_id: "vid-03",
+    instance_id: "vid-03:u1",
+  });
+});
+
 test("multipart upload accepts a local video without exposing credentials", async (t) => {
   const secret = "multipart-sentinel-secret";
   const restoreEnvironment = setApiKey(secret);
@@ -352,6 +487,36 @@ test("invalid cross-video input is rejected before TwelveLabs is called", async 
   assert.equal(providerCalls, 0);
 });
 
+test("provider asset metadata cannot be relabeled as another video", async (t) => {
+  const restoreEnvironment = setApiKey("server-secret");
+  const restoreFetch = setFetch(async () =>
+    readyAssetResponse("vid-other"),
+  );
+  t.after(() => {
+    restoreFetch();
+    restoreEnvironment();
+  });
+
+  const response = await analyze(
+    jsonRequest("/api/integrations/twelvelabs/analyze", {
+      video_id: "vid-03",
+      instance_id: "vid-03:u1",
+      asset_id: "asset-123",
+      video_duration_ms: 12_000,
+      particle: trackAParticle,
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.error.code, "TWELVELABS_INVALID_REQUEST");
+  assert.deepEqual(body.error.details, {
+    retryable: false,
+    video_id: "vid-03",
+    instance_id: "vid-03:u1",
+  });
+});
+
 test("malformed structured output becomes a safe provider error", async (t) => {
   const restoreEnvironment = setApiKey("server-secret");
   const secretDiagnostic = "provider-secret-diagnostic";
@@ -443,4 +608,34 @@ function readyAssetResponse(videoId = "vid-03"): Response {
     file_type: "video/mp4",
     user_metadata: { video_id: videoId },
   });
+}
+
+function assertCanonicalMilliseconds(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach(assertCanonicalMilliseconds);
+    return;
+  }
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return;
+  }
+  const record = value as Record<string, unknown>;
+  for (const [key, field] of Object.entries(record)) {
+    if (key.endsWith("_ms")) {
+      assert.equal(
+        Number.isSafeInteger(field) && (field as number) >= 0,
+        true,
+        `${key} must be a non-negative safe integer`,
+      );
+    }
+    assertCanonicalMilliseconds(field);
+  }
+  if (
+    typeof record.start_ms === "number" &&
+    typeof record.end_ms === "number"
+  ) {
+    assert.ok(record.end_ms > record.start_ms);
+  }
 }

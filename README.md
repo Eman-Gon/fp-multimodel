@@ -95,6 +95,7 @@ Raw video
 | Transcript Review | Correct draft transcript before alignment |
 | Coding Queue | Clips awaiting review |
 | Coding Interface | Video scrub + correct/confirm gesture & metadata fields |
+| AI Setup | Configure TwelveLabs, index videos, and request Pegasus drafts |
 | Clip Explorer | Browse confirmed clips grouped by particle and communicative meaning |
 | Clip Detail | View the meaning equation, linguistic context, and reviewed clip metadata |
 | Graph Explorer | Visualize the coded corpus as a graph |
@@ -245,28 +246,178 @@ The provider-independent B1–B3 core lives in `lib/track-b`. It currently:
 - returns completed or failed status per video so failed provider calls can be
   retried without rerunning completed videos
 
-The concrete TwelveLabs integration now uses the current v1.3 workflow:
-`/assets` for direct or URL uploads, `/indexes/{index-id}/indexed-assets` for
-separate indexing, and Pegasus 1.5 `/analyze` calls with the existing controlled
-gesture schema. Provider-native responses are retained beside the strict
-gesture value while every emitted field remains an unconfirmed suggestion.
+### TwelveLabs setup
 
-Configure the server-only credential locally:
+The concrete integration uses the TwelveLabs v1.3 asset, indexed-asset, and
+Pegasus 1.5 analysis APIs. Configure its server-only credential locally:
 
 ```bash
 cp .env.example .env.local
-# Set TWELVELABS_API_KEY in .env.local; never use a NEXT_PUBLIC_ variable.
+# Edit .env.local:
+TWELVELABS_API_KEY=your-server-side-key
 ```
 
-The narrow server routes are:
+Never use a `NEXT_PUBLIC_` variable for this key. The status route returns only
+configuration metadata:
 
-- `GET /api/integrations/twelvelabs/status` — configuration status only; never
-  returns the credential
-- `POST /api/integrations/twelvelabs/index` — `upload`, `index`, and `status`
-  actions for the asynchronous asset/index workflow
-- `POST /api/integrations/twelvelabs/analyze` — validates one Track A particle,
-  constructs the controlled prompt/schema server-side, and returns an
-  unconfirmed Track B gesture draft
+```http
+GET /api/integrations/twelvelabs/status
+```
+
+```json
+{
+  "data": {
+    "provider": "twelvelabs",
+    "configured": true,
+    "api_version": "v1.3",
+    "model": "pegasus1.5",
+    "capabilities": {
+      "direct_upload": true,
+      "indexing": true,
+      "structured_gesture_analysis": true
+    }
+  }
+}
+```
+
+The browser workflow is available at `/integrations/twelvelabs`.
+
+### Index a video
+
+Indexing is an explicit asynchronous sequence. Keep the returned `asset_id`
+and `indexed_asset_id`; neither replaces the research `video_id`.
+
+1. Upload a public URL:
+
+   ```json
+   {
+     "action": "upload",
+     "video_id": "vid03",
+     "index_id": "your-twelvelabs-index-id",
+     "video_url": "https://media.example/source.mp4"
+   }
+   ```
+
+2. While the response is `stage: "upload", status: "processing"`, poll with:
+
+   ```json
+   {
+     "action": "status",
+     "video_id": "vid03",
+     "index_id": "your-twelvelabs-index-id",
+     "asset_id": "asset-123"
+   }
+   ```
+
+3. When the upload is `ready`, start indexing:
+
+   ```json
+   {
+     "action": "index",
+     "video_id": "vid03",
+     "index_id": "your-twelvelabs-index-id",
+     "asset_id": "asset-123"
+   }
+   ```
+
+4. Poll the indexed asset until terminal:
+
+   ```json
+   {
+     "action": "status",
+     "video_id": "vid03",
+     "index_id": "your-twelvelabs-index-id",
+     "asset_id": "asset-123",
+     "indexed_asset_id": "indexed-456"
+   }
+   ```
+
+`POST /api/integrations/twelvelabs/index` returns `202` with
+`status: "processing"` for provider `pending`, `queued`, or `indexing` states.
+It returns `200` for terminal `ready` or `failed` states:
+
+```json
+{
+  "data": {
+    "provider": "twelvelabs",
+    "video_id": "vid03",
+    "index_id": "your-twelvelabs-index-id",
+    "asset_id": "asset-123",
+    "indexed_asset_id": "indexed-456",
+    "stage": "index",
+    "status": "ready"
+  }
+}
+```
+
+Multipart upload is also supported with `video_id`, `index_id`, and
+`video_file` fields.
+
+### Analyze one particle
+
+Analysis accepts one complete Track A particle. IDs and all canonical times are
+validated before any provider call. Times are non-negative absolute integer
+milliseconds on the source-video timeline:
+
+```json
+{
+  "video_id": "vid03",
+  "instance_id": "vid03:u17",
+  "asset_id": "asset-123",
+  "video_duration_ms": 183000,
+  "particle": {
+    "instance_id": "vid03:u17",
+    "fp_token": "吗",
+    "fp_pinyin": "ma",
+    "surface_form": "嗎",
+    "fp_start_ms": 14310,
+    "fp_end_ms": 14560,
+    "utterance_id": "u17",
+    "source": "mfa_rule",
+    "confidence": 0.82,
+    "confirmed": false
+  }
+}
+```
+
+`POST /api/integrations/twelvelabs/analyze` returns the same `video_id`,
+`instance_id`, and `asset_id` with an unconfirmed `GestureAnnotationDraft`.
+Every AI field has `confirmed: false`. `model_evidence.pegasus` retains the
+original parsed suggestion, while `model_evidence.provider` retains the model,
+asset, provider window, response ID, finish reason, and an allowlisted original
+structured-response envelope. Arbitrary provider diagnostics and server
+credentials are never returned.
+
+### Retry and human review
+
+Errors use this envelope:
+
+```json
+{
+  "error": {
+    "code": "TWELVELABS_RATE_LIMITED",
+    "message": "TwelveLabs rate-limited the request. Try again later.",
+    "details": {
+      "retryable": true,
+      "video_id": "vid03",
+      "instance_id": "vid03:u17"
+    }
+  }
+}
+```
+
+Retry transport failures, timeouts, rate limits, and provider 5xx failures only
+when `details.retryable` is `true`. Resume polling with the saved provider IDs;
+do not repeat a completed upload or indexing action, because provider creation
+requests are not assumed to be idempotent. A failed video can be retried
+without rerunning completed videos.
+
+A successful analysis is still only an AI suggestion. It does not confirm a
+clip or enter corpus counts automatically. Import drafts through the
+optimistic-versioned Track B clip endpoint, then require a researcher to
+accept, edit, or skip each field in the coding workspace. The original Pegasus
+suggestion and provider provenance remain stored after review; only explicit
+human confirmation can make the clip eligible for confirmed-corpus insights.
 
 The batched Python MediaPipe worker remains a next integration step. Provider
 calls stay behind small interfaces, so tests require neither credentials nor
@@ -292,4 +443,5 @@ The review interface now includes:
 npm install
 npm test
 npm run typecheck
+npm run build
 ```
