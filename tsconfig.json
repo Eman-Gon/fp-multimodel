@@ -3,17 +3,37 @@
     "allowImportingTsExtensions": true,
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "incremental": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "noEmit": true,
     "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "paths": {
+      "@/*": ["./*"]
+    },
+    "plugins": [{ "name": "next" }],
+    "resolveJsonModule": true,
     "strict": true,
     "target": "ES2022",
-    "types": ["node"],
+    "types": ["node", "react", "react-dom"],
     "verbatimModuleSyntax": true
   },
-  "include": ["lib/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
 }

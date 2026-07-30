@@ -59,3 +59,29 @@ def test_prepare_corpus_writes_lab_and_precise_segment_command(
     assert commands[0][commands[0].index("-t") + 1] == "2.700"
     assert commands[0][commands[0].index("-ar") + 1] == "16000"
 
+
+def test_prepare_corpus_aligns_canonical_ma_not_traditional_surface(
+    tmp_path: Path,
+) -> None:
+    audio = tmp_path / "audio.wav"
+    audio.touch()
+    reviewed = make_transcript()
+    reviewed.utterances[0] = Utterance(
+        id="u1",
+        start_ms=12_400,
+        end_ms=15_100,
+        text="你吃飯了嗎",
+        speaker="spkA",
+        confidence=0.82,
+        transcript_confirmed=True,
+    )
+
+    entries = prepare_mfa_corpus(
+        reviewed,
+        audio,
+        tmp_path / "corpus",
+        runner=lambda _command, *, check: None,
+    )
+
+    assert entries[0].lab.read_text(encoding="utf-8") == "你吃飯了吗\n"
+    assert reviewed.utterances[0].surface_text == "你吃飯了嗎"

@@ -1,4 +1,9 @@
-import type { GestureRegion, GestureType } from "./vocab.ts";
+import type {
+  GestureRegion,
+  GestureType,
+  ParticlePinyin,
+  ParticleToken,
+} from "./vocab.ts";
 
 export interface TimeRange {
   readonly start_ms: number;
@@ -19,8 +24,8 @@ export interface FinalParticleTiming {
  * The JSON shape currently emitted by the Python Track A pipeline.
  */
 export interface FinalParticleInstance extends FinalParticleTiming {
-  readonly fp_token: string;
-  readonly fp_pinyin: string;
+  readonly fp_token: ParticleToken;
+  readonly fp_pinyin: ParticlePinyin;
   readonly surface_form: string;
   readonly utterance_id: string;
 }

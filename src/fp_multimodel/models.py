@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -16,7 +16,7 @@ Confidence = Annotated[float, Field(ge=0.0, le=1.0)]
 class StrictModel(BaseModel):
     """Base model that rejects misspelled or unexpected input fields."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class Utterance(StrictModel):
@@ -26,9 +26,24 @@ class Utterance(StrictModel):
     start_ms: Milliseconds
     end_ms: Milliseconds
     text: str = Field(min_length=1)
+    surface_text: str = Field(min_length=1)
     speaker: str = Field(min_length=1)
     confidence: Confidence
     transcript_confirmed: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_target_particles(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        text = value.get("text")
+        if not isinstance(text, str):
+            return value
+
+        normalized = dict(value)
+        normalized.setdefault("surface_text", text)
+        normalized["text"] = text.replace("嗎", "吗")
+        return normalized
 
     @model_validator(mode="after")
     def validate_time_range(self) -> "Utterance":
@@ -82,6 +97,9 @@ class ParticleInstance(StrictModel):
     fp_start_ms: Milliseconds
     fp_end_ms: Milliseconds
     utterance_id: str = Field(min_length=1)
+    source: Literal["mfa_rule"] = "mfa_rule"
+    confidence: Confidence | None = None
+    confirmed: Literal[False] = False
 
     @model_validator(mode="after")
     def validate_time_range(self) -> "ParticleInstance":

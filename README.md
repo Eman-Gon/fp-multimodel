@@ -85,6 +85,8 @@ The first runnable vertical slice lives in the Python package under
 - traditional `嗎` → simplified `吗` normalization while retaining
   `surface_form`
 - deterministic `instance_id` values for the Track B handoff
+- explicit `source`, nullable confidence, and `confirmed: false` provenance on
+  every rule-derived particle
 - conversion of segment-local MFA timings back to source-video milliseconds
 
 ASR provider integration (A2), sentence-type classification (A6), and nested

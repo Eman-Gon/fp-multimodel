@@ -27,7 +27,7 @@ item []:
         intervals [2]:
             xmin = 1.5
             xmax = 2.08
-            text = "嗎"
+            text = "吗"
         intervals [3]:
             xmin = 2.08
             xmax = 2.7

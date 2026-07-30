@@ -69,3 +69,11 @@ item []:
         match=r"No suitable word interval tier.*Available tiers: 'words'",
     ):
         parse_textgrid(point_grid, "utt-001")
+
+
+def test_parse_textgrid_reports_malformed_input_with_path(tmp_path: Path) -> None:
+    malformed = tmp_path / "malformed.TextGrid"
+    malformed.write_text("not a TextGrid", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=r"could not parse TextGrid .*malformed"):
+        parse_textgrid(malformed, "utt-001")

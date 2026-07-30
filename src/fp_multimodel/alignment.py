@@ -7,6 +7,7 @@ from os import PathLike
 from pathlib import Path
 
 from praatio import textgrid
+from praatio.utilities.errors import PraatioException
 
 from fp_multimodel.models import AlignedInterval, UtteranceAlignment
 
@@ -34,10 +35,15 @@ def parse_textgrid(
     """
 
     textgrid_path = Path(path)
-    parsed = textgrid.openTextgrid(
-        str(textgrid_path),
-        includeEmptyIntervals=True,
-    )
+    if not textgrid_path.is_file():
+        raise FileNotFoundError(f"TextGrid does not exist: {textgrid_path}")
+    try:
+        parsed = textgrid.openTextgrid(
+            str(textgrid_path),
+            includeEmptyIntervals=True,
+        )
+    except (IndexError, PraatioException, UnicodeError, ValueError) as error:
+        raise ValueError(f"could not parse TextGrid {textgrid_path}: {error}") from error
     tier = _select_interval_tier(parsed, textgrid_path, tier_name)
 
     intervals = [

@@ -79,6 +79,40 @@ test("a none result never invents region or timestamps", () => {
   assert.equal(draft.gesture_boundaries.value, null);
 });
 
+test("rejects contradictory none inputs at the public reconciliation boundary", () => {
+  assert.throws(
+    () =>
+      reconcileGestureDraft(
+        "fp-1",
+        analysisWindow,
+        {
+          gesture_type: "none",
+          gesture_region: "face",
+          segment: { start_ms: 3_000, end_ms: 3_200 },
+          confidence: 0.8,
+        },
+        [],
+      ),
+    /require a null region and segment/,
+  );
+
+  assert.throws(
+    () =>
+      reconcileGestureDraft(
+        "fp-1",
+        analysisWindow,
+        {
+          gesture_type: "none",
+          gesture_region: null,
+          segment: null,
+          confidence: 0.8,
+        },
+        [{ start_ms: 3_000, end_ms: 3_200 }],
+      ),
+    /cannot have motion intervals/,
+  );
+});
+
 test("nearest interval selection has deterministic tie-breaking", () => {
   assert.deepEqual(
     selectNearestMotionInterval(
@@ -91,4 +125,3 @@ test("nearest interval selection has deterministic tie-breaking", () => {
     { start_ms: 2_900, end_ms: 4_100 },
   );
 });
-

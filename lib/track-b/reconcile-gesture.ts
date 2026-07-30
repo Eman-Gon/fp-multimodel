@@ -5,7 +5,12 @@ import type {
   PegasusGesture,
   TimeRange,
 } from "../types.ts";
-import type { GestureRegion, GestureType } from "../vocab.ts";
+import {
+  GESTURE_REGIONS,
+  GESTURE_TYPES,
+  type GestureRegion,
+  type GestureType,
+} from "../vocab.ts";
 import {
   assertConfidence,
   assertNonEmptyId,
@@ -21,6 +26,24 @@ export function reconcileGestureDraft(
   assertNonEmptyId(instanceId, "instanceId");
   assertTimeRange(analysisWindow, "analysisWindow");
   assertConfidence(semanticGesture.confidence, "semanticGesture.confidence");
+
+  if (!GESTURE_TYPES.includes(semanticGesture.gesture_type)) {
+    throw new TypeError("semanticGesture.gesture_type is not controlled");
+  }
+  if (
+    semanticGesture.gesture_region !== null &&
+    !GESTURE_REGIONS.includes(semanticGesture.gesture_region)
+  ) {
+    throw new TypeError("semanticGesture.gesture_region is not controlled");
+  }
+
+  for (const [index, interval] of motionIntervals.entries()) {
+    assertTimeRange(interval, `motionIntervals[${index}]`);
+    assertContained(interval, analysisWindow, `motionIntervals[${index}]`);
+    if (interval.confidence !== undefined && interval.confidence !== null) {
+      assertConfidence(interval.confidence, `motionIntervals[${index}].confidence`);
+    }
+  }
 
   const gesturePresent = semanticGesture.gesture_type !== "none";
   const presence = draftField(
@@ -40,6 +63,16 @@ export function reconcileGestureDraft(
   );
 
   if (!gesturePresent) {
+    if (
+      semanticGesture.gesture_region !== null ||
+      semanticGesture.segment !== null
+    ) {
+      throw new TypeError("none semantic gestures require a null region and segment");
+    }
+    if (motionIntervals.length > 0) {
+      throw new TypeError("none semantic gestures cannot have motion intervals");
+    }
+
     return {
       instance_id: instanceId,
       analysis_window: analysisWindow,
@@ -56,14 +89,6 @@ export function reconcileGestureDraft(
 
   assertTimeRange(semanticGesture.segment, "semanticGesture.segment");
   assertContained(semanticGesture.segment, analysisWindow, "semanticGesture.segment");
-
-  for (const [index, interval] of motionIntervals.entries()) {
-    assertTimeRange(interval, `motionIntervals[${index}]`);
-    assertContained(interval, analysisWindow, `motionIntervals[${index}]`);
-    if (interval.confidence !== undefined && interval.confidence !== null) {
-      assertConfidence(interval.confidence, `motionIntervals[${index}].confidence`);
-    }
-  }
 
   const nearestMotion = selectNearestMotionInterval(
     semanticGesture.segment,
@@ -144,4 +169,3 @@ function draftField<T>(
 ): AiDraftField<T> {
   return { value, confidence, source, confirmed: false };
 }
-

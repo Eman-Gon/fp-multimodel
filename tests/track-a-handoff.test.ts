@@ -6,8 +6,8 @@ import { createTrackBHandoff } from "../lib/track-b/track-a-handoff.ts";
 test("adapts the current Track A particle artifact without losing metadata", () => {
   const trackAParticle = {
     instance_id: "vid1:u1",
-    fp_token: "吗",
-    fp_pinyin: "ma",
+    fp_token: "吗" as const,
+    fp_pinyin: "ma" as const,
     surface_form: "嗎",
     fp_start_ms: 13_900,
     fp_end_ms: 14_480,
@@ -70,8 +70,8 @@ test("rejects zero-duration Track A intervals at the B handoff", () => {
 test("rejects duplicate utterance IDs and particles beyond the source duration", () => {
   const duplicate = {
     instance_id: "vid1:u1",
-    fp_token: "吗",
-    fp_pinyin: "ma",
+    fp_token: "吗" as const,
+    fp_pinyin: "ma" as const,
     surface_form: "吗",
     fp_start_ms: 1_000,
     fp_end_ms: 1_100,
@@ -81,10 +81,19 @@ test("rejects duplicate utterance IDs and particles beyond the source duration",
   assert.throws(
     () =>
       createTrackBHandoff(
-        { video_id: "vid1", particles: [duplicate, duplicate] },
+        {
+          video_id: "vid1",
+          particles: [
+            duplicate,
+            {
+              ...duplicate,
+              instance_id: "vid1:u1:duplicate",
+            },
+          ],
+        },
         2_000,
       ),
-    /duplicate Track B instance_id/,
+    /duplicate Track A utterance_id/,
   );
 
   assert.throws(
@@ -96,6 +105,7 @@ test("rejects duplicate utterance IDs and particles beyond the source duration",
             {
               ...duplicate,
               instance_id: "vid1:u2",
+              utterance_id: "u2",
               fp_start_ms: 1_900,
               fp_end_ms: 2_100,
             },
@@ -104,5 +114,65 @@ test("rejects duplicate utterance IDs and particles beyond the source duration",
         2_000,
       ),
     /must not exceed/,
+  );
+});
+
+test("validates Track A particle vocabulary before building model prompts", () => {
+  const valid = {
+    instance_id: "vid1:u1",
+    fp_token: "吗" as const,
+    fp_pinyin: "ma" as const,
+    surface_form: "嗎",
+    fp_start_ms: 1_000,
+    fp_end_ms: 1_100,
+    utterance_id: "u1",
+  };
+
+  assert.throws(
+    () =>
+      createTrackBHandoff(
+        {
+          video_id: "vid1",
+          particles: [{ ...valid, fp_pinyin: "ne" }],
+        },
+        2_000,
+      ),
+    /fp_pinyin does not match/,
+  );
+
+  assert.throws(
+    () =>
+      createTrackBHandoff(
+        {
+          video_id: "vid1",
+          particles: [{ ...valid, surface_form: "呢" }],
+        },
+        2_000,
+      ),
+    /surface_form does not match/,
+  );
+});
+
+test("rejects a stale or cross-video Track A instance ID", () => {
+  assert.throws(
+    () =>
+      createTrackBHandoff(
+        {
+          video_id: "vid1",
+          particles: [
+            {
+              instance_id: "vid2:u9",
+              fp_token: "吗",
+              fp_pinyin: "ma",
+              surface_form: "吗",
+              fp_start_ms: 1_000,
+              fp_end_ms: 1_100,
+              utterance_id: "u1",
+            },
+          ],
+        },
+        2_000,
+      ),
+    /instance_id must equal vid1:u1/,
   );
 });

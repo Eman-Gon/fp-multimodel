@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import unicodedata
 from pathlib import Path
 
 from fp_multimodel.alignment import parse_textgrid
 from fp_multimodel.models import (
     AlignedInterval,
     ParticleDetectionResult,
+    ParticleInstance,
     Transcript,
     Utterance,
     UtteranceAlignment,
 )
 from fp_multimodel.particles import detect_particles
+from fp_multimodel.vocab import PARTICLE_NORMALIZATION
 
 
 def _find_textgrid(alignment_dir: Path, utterance: Utterance) -> Path:
@@ -63,6 +66,43 @@ def _to_source_timeline(
     )
 
 
+def _final_surface_particle(utterance: Utterance) -> str | None:
+    for character in reversed(utterance.surface_text.strip()):
+        if character.isspace() or unicodedata.category(character).startswith("P"):
+            continue
+        return character if character in PARTICLE_NORMALIZATION else None
+    return None
+
+
+def _restore_particle_surface_forms(
+    result: ParticleDetectionResult,
+    transcript: Transcript,
+) -> ParticleDetectionResult:
+    utterances = {utterance.id: utterance for utterance in transcript.utterances}
+    restored: list[ParticleInstance] = []
+
+    for particle in result.particles:
+        surface_form = _final_surface_particle(utterances[particle.utterance_id])
+        if (
+            surface_form is None
+            or PARTICLE_NORMALIZATION[surface_form] != particle.fp_token
+        ):
+            raise ValueError(
+                f"alignment final particle for {particle.utterance_id!r} does not "
+                "match the confirmed transcript"
+            )
+        restored.append(
+            ParticleInstance.model_validate(
+                {
+                    **particle.model_dump(),
+                    "surface_form": surface_form,
+                }
+            )
+        )
+
+    return ParticleDetectionResult(video_id=result.video_id, particles=restored)
+
+
 def detect_from_mfa_output(
     transcript: Transcript,
     alignment_dir: Path,
@@ -95,5 +135,7 @@ def detect_from_mfa_output(
         )
         alignments.append(_to_source_timeline(local_alignment, utterance))
 
-    return detect_particles(transcript.video_id, alignments)
-
+    return _restore_particle_surface_forms(
+        detect_particles(transcript.video_id, alignments),
+        transcript,
+    )
