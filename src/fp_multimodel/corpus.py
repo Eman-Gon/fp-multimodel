@@ -13,6 +13,7 @@ from fp_multimodel.manifest import (
     file_sha256,
     load_media_manifest,
     transcript_sha256,
+    verify_transcript_asr_artifact,
     write_manifest,
 )
 from fp_multimodel.models import Transcript, Utterance
@@ -102,6 +103,7 @@ def prepare_mfa_corpus(
     source_audio = source_audio.resolve()
     if not source_audio.is_file():
         raise FileNotFoundError(f"source audio does not exist: {source_audio}")
+    transcript = Transcript.model_validate(transcript.model_dump(mode="python"))
     if not transcript.utterances:
         raise ValueError("transcript contains no utterances")
 
@@ -120,6 +122,7 @@ def prepare_mfa_corpus(
             "source audio does not match its media manifest; normalize or "
             "select the correct video before preparing the corpus"
         )
+    verify_transcript_asr_artifact(transcript, source_audio.parent)
     if (
         transcript.asr_suggestion is not None
         and transcript.asr_suggestion.provenance.source_audio_sha256
@@ -183,6 +186,9 @@ def prepare_mfa_corpus(
             transcript_sha256=transcript_sha256(transcript),
             source_audio_sha256=source_audio_sha256,
             normalized_video_sha256=media_manifest.normalized_video_sha256,
+            asr_suggestion_artifact_sha256=(
+                transcript.asr_suggestion_artifact_sha256
+            ),
         ),
     )
     return entries

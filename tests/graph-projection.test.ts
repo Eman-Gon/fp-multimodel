@@ -7,6 +7,8 @@ import {
   createDemoClips,
   createSecondDemoClip,
 } from "../lib/track-c/seed.ts";
+import type { TimeRange } from "../lib/types.ts";
+import type { ParticleToken } from "../lib/vocab.ts";
 import type {
   ClipDetail,
   ReviewField,
@@ -132,8 +134,8 @@ test("multi-particle edges remain distinct and fp_count is derived from instance
     fp_pinyin: "ne",
     fields: {
       ...structuredClone(first.fields),
-      fp_token: confirmedField("呢"),
-      fp_timing: confirmedField({
+      fp_token: confirmedField<ParticleToken>("呢"),
+      fp_timing: confirmedField<TimeRange>({
         start_ms: 15_100,
         end_ms: 15_320,
       }),

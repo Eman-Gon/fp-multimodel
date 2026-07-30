@@ -271,9 +271,11 @@ function assertProviderEvidence(value: unknown): void {
   }
   const keys = Object.keys(value).sort();
   const expectedKeys = [
+    "asset_id",
     "finish_reason",
     "model",
     "provider",
+    "provider_window",
     "raw_response",
     "response_id",
   ];

@@ -139,19 +139,28 @@ def _dispatch(args: argparse.Namespace) -> None:
         return
 
     if args.command == "transcribe":
+        audio = args.audio.resolve()
+        output = args.output.resolve()
+        if output.parent != audio.parent:
+            raise ValueError(
+                "the draft transcript must stay in the source video's "
+                "directory beside audio.wav"
+            )
+        if output.exists() and not args.force:
+            raise FileExistsError(f"refusing to overwrite existing file: {output}")
         transcript = create_draft_transcript(
             args.video_id,
-            args.audio,
+            audio,
             WhisperCliMandarinAsr(
                 whisper_bin=args.whisper_bin,
                 model=args.model,
             ),
             default_speaker=args.speaker_id,
         )
-        write_model(args.output, transcript, overwrite=args.force)
+        write_model(output, transcript, overwrite=args.force)
         print(
             f"drafted {len(transcript.utterances)} Mandarin utterances: "
-            f"{args.output}"
+            f"{output}"
         )
         return
 

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import TypeVar
 
 from pydantic import BaseModel
 
+from fp_multimodel.manifest import verify_transcript_asr_artifact
 from fp_multimodel.models import Transcript, TranscriptBatch
 
 
@@ -14,9 +16,18 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 def load_transcript(path: Path) -> Transcript:
-    """Load and strictly validate a transcript JSON document."""
+    """Load a transcript and verify its durable A2 suggestion boundary."""
 
-    return Transcript.model_validate_json(path.read_text(encoding="utf-8"))
+    raw_document = path.read_text(encoding="utf-8")
+    payload = json.loads(raw_document)
+    if not isinstance(payload, dict) or "transcript_origin" not in payload:
+        raise ValueError(
+            "transcript JSON requires explicit transcript_origin; migrate "
+            "legacy drafts before continuing"
+        )
+    transcript = Transcript.model_validate_json(raw_document)
+    verify_transcript_asr_artifact(transcript, path.parent)
+    return transcript
 
 
 def load_transcript_batch(path: Path) -> TranscriptBatch:

@@ -313,6 +313,8 @@ test("preserves validated provider-native evidence through review import", () =>
     provider: {
       provider: "twelvelabs",
       model: "pegasus1.5",
+      asset_id: "asset-123",
+      provider_window: { start_ms: 12_310, end_ms: 16_560 },
       response_id: "response-123",
       finish_reason: "stop",
       raw_response: {

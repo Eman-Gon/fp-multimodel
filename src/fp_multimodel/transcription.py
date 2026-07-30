@@ -14,10 +14,16 @@ from typing import Any, Protocol
 
 from pydantic import Field, model_validator
 
-from fp_multimodel.manifest import file_sha256, load_media_manifest
+from fp_multimodel.manifest import (
+    asr_suggestion_artifact_sha256,
+    file_sha256,
+    load_media_manifest,
+    write_asr_suggestion_artifact,
+)
 from fp_multimodel.models import (
     AsrDiagnostic,
     AsrProvenance,
+    AsrSuggestionArtifact,
     AsrSuggestionSegment,
     Confidence,
     Milliseconds,
@@ -57,10 +63,22 @@ class AsrRun(StrictModel):
     task: str = Field(min_length=1)
     confidence_method: str = Field(min_length=1)
     provider_output_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    provider_output_json: str = Field(min_length=2)
     segments: tuple[AsrSegment, ...] = Field(default_factory=tuple)
 
     @model_validator(mode="after")
     def validate_segments(self) -> "AsrRun":
+        try:
+            json.loads(self.provider_output_json)
+        except json.JSONDecodeError as error:
+            raise ValueError("provider_output_json must contain valid JSON") from error
+        if (
+            hashlib.sha256(self.provider_output_json.encode("utf-8")).hexdigest()
+            != self.provider_output_sha256
+        ):
+            raise ValueError(
+                "provider_output_json does not match provider_output_sha256"
+            )
         ids = [segment.id for segment in self.segments]
         if len(ids) != len(set(ids)):
             raise ValueError("ASR segment ids must be unique")
@@ -166,8 +184,9 @@ class WhisperCliMandarinAsr:
             raw_output = output_path.read_bytes()
 
         try:
-            payload = json.loads(raw_output)
-        except json.JSONDecodeError as error:
+            provider_output_json = raw_output.decode("utf-8")
+            payload = json.loads(provider_output_json)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise ValueError("Whisper returned invalid JSON") from error
         if not isinstance(payload, dict):
             raise ValueError("Whisper JSON output must be an object")
@@ -228,7 +247,7 @@ class WhisperCliMandarinAsr:
                         raw_segment.get("end"),
                         f"Whisper segment {index} end",
                     ),
-                    text=raw_text.strip(),
+                    text=raw_text,
                     confidence=confidence,
                     diagnostics=diagnostics,
                 )
@@ -241,6 +260,7 @@ class WhisperCliMandarinAsr:
             task="transcribe",
             confidence_method="exp_avg_logprob",
             provider_output_sha256=hashlib.sha256(raw_output).hexdigest(),
+            provider_output_json=provider_output_json,
             segments=tuple(segments),
         )
 
@@ -312,16 +332,23 @@ def create_draft_transcript(
             for segment in run.segments
         ),
     )
-    return Transcript(
+    artifact = AsrSuggestionArtifact(
+        video_id=video_id,
+        suggestion=suggestion,
+        provider_output_json=run.provider_output_json,
+    )
+    artifact_sha256 = asr_suggestion_artifact_sha256(artifact)
+    transcript = Transcript(
         video_id=video_id,
         transcript_origin="asr",
         asr_suggestion=suggestion,
+        asr_suggestion_artifact_sha256=artifact_sha256,
         utterances=[
             Utterance(
                 id=segment.id,
                 start_ms=segment.start_ms,
                 end_ms=segment.end_ms,
-                text=segment.text,
+                text=segment.text.strip(),
                 speaker=segment.speaker or default_speaker,
                 confidence=segment.confidence,
                 source_segment_ids=[segment.id],
@@ -330,6 +357,10 @@ def create_draft_transcript(
             for segment in run.segments
         ],
     )
+    artifact_path = write_asr_suggestion_artifact(audio.parent, artifact)
+    if artifact_path.stem != artifact_sha256:
+        raise AssertionError("ASR suggestion artifact digest changed during write")
+    return transcript
 
 
 def create_draft_transcript_batch(

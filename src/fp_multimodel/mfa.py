@@ -68,6 +68,9 @@ def align_corpus(
             transcript_sha256=corpus_manifest.transcript_sha256,
             source_audio_sha256=corpus_manifest.source_audio_sha256,
             normalized_video_sha256=corpus_manifest.normalized_video_sha256,
+            asr_suggestion_artifact_sha256=(
+                corpus_manifest.asr_suggestion_artifact_sha256
+            ),
             dictionary_model=DICTIONARY_MODEL,
             acoustic_model=ACOUSTIC_MODEL,
         ),
