@@ -40,6 +40,7 @@ def transcript_sha256(transcript: Transcript) -> str:
 
     payload = {
         "video_id": transcript.video_id,
+        "speakers": [speaker.model_dump() for speaker in transcript.speakers],
         "utterances": [
             {
                 "id": utterance.id,
@@ -49,6 +50,11 @@ def transcript_sha256(transcript: Transcript) -> str:
                 "surface_text": utterance.surface_text,
                 "speaker": utterance.speaker,
                 "transcript_confirmed": utterance.transcript_confirmed,
+                "linguistic_context": (
+                    utterance.linguistic_context.model_dump()
+                    if utterance.linguistic_context is not None
+                    else None
+                ),
             }
             for utterance in transcript.utterances
         ],
@@ -95,4 +101,3 @@ def load_manifest(directory: Path, *, expected_stage: str) -> TrackAManifest:
             f"found {manifest.stage!r}"
         )
     return manifest
-

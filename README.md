@@ -4,7 +4,7 @@ A research tool for analyzing how native Mandarin speakers use **gesture and ton
 
 ## What it does
 
-Given raw video of native Mandarin speakers, the tool:
+Given one or more raw videos of native Mandarin speakers, the tool:
 
 1. Transcribes speech and detects sentence-final particle (FP) mentions
 2. Force-aligns the transcript to get precise timestamps
@@ -20,6 +20,11 @@ Given raw video of native Mandarin speakers, the tool:
    - Gesture region (face / body / both)
    - Gesture start/end time (milliseconds; frames are derived for display)
    - Sentence type
+
+Every project may contain multiple source videos. Video IDs, source timelines,
+speaker namespaces, transcripts, alignment artifacts, and particle instances
+remain separate while the Coding Queue and Clip Explorer provide corpus-wide
+views across the project.
 
 A human researcher reviews and corrects the AI's draft coding — transcription and gesture classification are the two places automation is least reliable, so those are built as checkpoints, not black boxes.
 
@@ -113,6 +118,8 @@ The first runnable vertical slice lives in the Python package under
 - conversion of segment-local MFA timings back to source-video milliseconds
 - revision manifests that reject stale or cross-video TextGrids after a
   transcript correction
+- validated multi-video transcript batches with unique video identities
+- human-reviewable discourse, sentence, and clause context on each utterance
 
 The provider-neutral A2 boundary is present, but a concrete Whisper or
 TwelveLabs adapter is still pending. Sentence-type classification (A6) and
@@ -178,6 +185,20 @@ The provider-independent B1–B3 core lives in `lib/track-b`. It currently:
 - emits gesture presence and gesture boundaries as separate, unconfirmed draft
   fields with explicit confidence and provenance
 - handles every FP instance independently for multi-particle videos
+- analyzes multiple videos concurrently without mixing source timelines
+
+## Track C foundation
+
+The review interface now includes:
+
+- a coding queue spanning multiple source videos
+- video, particle, sentence-type, speaker, and status filters
+- deterministic names containing video, speaker, addressee, particle, and time
+- reviewable discourse, sentence, clause, communicative-function, and meaning
+  explanation fields
+- a visible particle + tone + sentence type + gesture meaning equation
+- a clip information panel with canonical times and derived frame numbers
+- a Clip Explorer grouped by particle and communicative function
 
 The concrete TwelveLabs client and batched Python MediaPipe worker are the next
 integration step. The core uses small provider interfaces so API credentials

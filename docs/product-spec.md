@@ -34,6 +34,11 @@ decision.
 
 ## Unit of analysis
 
+One research project may contain multiple source videos. Each video keeps its
+own transcript, participants, frame rate, source timeline, alignment manifest,
+and processing status. Project-level queues and explorers aggregate records
+across videos only after retaining that video identity.
+
 One clip is a source-video interval containing at least one target particle.
 Every target-particle occurrence inside the clip is a separate particle
 instance, even when the clip contains more than one.
@@ -151,6 +156,15 @@ emphasis, topic continuation, other, and uncertain.
 
 ## Research interface
 
+### Multi-video ingest
+
+- accepts one or more source videos in a project
+- assigns or requires a unique stable `video_id` for each input
+- reports transcript, alignment, gesture-analysis, and review status per video
+- permits failed videos to be retried without rerunning completed videos
+- never combines millisecond or frame coordinates across videos
+- exposes project-wide counts only from the selected review states
+
 ### Transcript review
 
 - displays ASR utterances alongside the source media
@@ -218,8 +232,9 @@ access to the original evidence.
 ## Delivery order
 
 1. Accurate transcript review and stale-alignment protection
-2. Particle detection, timing, clip generation, and participant metadata
-3. Gesture and tone suggestions with human correction
-4. Sentence, discourse, utterance, and clause annotation
-5. Reviewable communicative-function derivation and evidence equation
-6. Particle/meaning explorer and learner-facing clip detail
+2. Multi-video project ingest plus per-video status and transcript isolation
+3. Particle detection, timing, clip generation, and participant metadata
+4. Gesture and tone suggestions with human correction
+5. Sentence, discourse, utterance, and clause annotation
+6. Reviewable communicative-function derivation and evidence equation
+7. Particle/meaning explorer and learner-facing clip detail

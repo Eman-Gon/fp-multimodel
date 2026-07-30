@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronUp, ToggleLeft, ToggleRight } from "lucide-react";
+import { ToggleLeft, ToggleRight } from "lucide-react";
 import {
+  COMMUNICATIVE_FUNCTIONS,
   GESTURE_REGIONS,
   GESTURE_TYPES,
   SENTENCE_TYPES,
@@ -25,9 +26,11 @@ interface FieldInspectorProps {
   readonly activeTarget: FieldTarget;
   readonly summary: ReviewSummary;
   readonly saveState: "saved" | "saving" | "error";
+  readonly liveMessage: string;
   readonly onActivate: (target: FieldTarget) => void;
   readonly onReview: (target: FieldTarget, review: FieldReview) => void;
   readonly onConfirmClip: () => void;
+  readonly onReturnToQueue: () => void;
 }
 
 export function FieldInspector({
@@ -35,9 +38,11 @@ export function FieldInspector({
   activeTarget,
   summary,
   saveState,
+  liveMessage,
   onActivate,
   onReview,
   onConfirmClip,
+  onReturnToQueue,
 }: FieldInspectorProps) {
   const particle = clip.particle_instances[0];
   if (particle === undefined) {
@@ -74,7 +79,7 @@ export function FieldInspector({
       <header className="field-inspector__header">
         <div>
           <h2 id="fields-heading">Coding fields</h2>
-          <p title={clip.fixture_note}>Seeded review fixture</p>
+          <p title={clip.fixture_note}>Demo clip · suggestions retained</p>
         </div>
         <div className="provenance-legend" aria-label="Field provenance legend">
           <span>
@@ -88,7 +93,11 @@ export function FieldInspector({
         </div>
       </header>
 
-      <InspectorSection title="Participants">
+      <div
+        className={`field-inspector__body${clip.clip.status === "confirmed" ? " field-inspector__body--read-only" : ""}`}
+        inert={clip.clip.status === "confirmed"}
+      >
+        <InspectorSection title="Participants">
         <FieldRow
           label="Speaker"
           field={clip.fields.speaker_id}
@@ -142,9 +151,9 @@ export function FieldInspector({
             ))}
           </select>
         </FieldRow>
-      </InspectorSection>
+        </InspectorSection>
 
-      <InspectorSection title="Particle">
+        <InspectorSection title="Particle">
         <FieldRow
           label="FP token"
           hint={`Surface form ${particle.surface_form}`}
@@ -200,9 +209,9 @@ export function FieldInspector({
             {formatRangeField(particle.fields.fp_timing)}
           </output>
         </FieldRow>
-      </InspectorSection>
+        </InspectorSection>
 
-      <InspectorSection title="Gesture">
+        <InspectorSection title="Gesture">
         <FieldRow
           label="Gesture present"
           field={particle.fields.gesture_present}
@@ -217,12 +226,28 @@ export function FieldInspector({
             className={`toggle-control${currentValue(particle.fields.gesture_present) ? " toggle-control--on" : ""}`}
             role="switch"
             aria-checked={currentValue(particle.fields.gesture_present)}
-            onClick={() =>
+            onClick={() => {
+              const nextPresent = !currentValue(
+                particle.fields.gesture_present,
+              );
               review(particleTarget("gesture_present"), {
                 action: "edit",
-                value: !currentValue(particle.fields.gesture_present),
-              })
-            }
+                value: nextPresent,
+              });
+              if (!nextPresent) {
+                review(particleTarget("gesture_type"), {
+                  action: "edit",
+                  value: "none",
+                });
+              } else if (
+                currentValue(particle.fields.gesture_type) === "none"
+              ) {
+                review(particleTarget("gesture_type"), {
+                  action: "edit",
+                  value: particle.fields.gesture_type.suggestion.value,
+                });
+              }
+            }}
           >
             {currentValue(particle.fields.gesture_present) ? (
               <ToggleRight aria-hidden="true" />
@@ -255,7 +280,7 @@ export function FieldInspector({
           >
             {GESTURE_TYPES.map((gestureType) => (
               <option value={gestureType} key={gestureType}>
-                {gestureType}
+                {humanize(gestureType)}
               </option>
             ))}
           </select>
@@ -281,7 +306,7 @@ export function FieldInspector({
           >
             {GESTURE_REGIONS.map((region) => (
               <option value={region} key={region}>
-                {region}
+                {humanize(region)}
               </option>
             ))}
           </select>
@@ -300,9 +325,9 @@ export function FieldInspector({
             {formatRangeField(particle.fields.gesture_timing)}
           </output>
         </FieldRow>
-      </InspectorSection>
+        </InspectorSection>
 
-      <InspectorSection title="Utterance">
+        <InspectorSection title="Utterance">
         <FieldRow
           label="Sentence type"
           field={clip.fields.sentence_type}
@@ -324,7 +349,7 @@ export function FieldInspector({
           >
             {SENTENCE_TYPES.map((sentenceType) => (
               <option value={sentenceType} key={sentenceType}>
-                {sentenceType}
+                {humanize(sentenceType)}
               </option>
             ))}
           </select>
@@ -350,12 +375,149 @@ export function FieldInspector({
           >
             {TONE_CONTOURS.map((tone) => (
               <option value={tone} key={tone}>
-                {tone}
+                {humanize(tone)}
               </option>
             ))}
           </select>
         </FieldRow>
-      </InspectorSection>
+        </InspectorSection>
+
+        <InspectorSection title="Meaning">
+          <FieldRow
+            label="Discourse context"
+            hint="Edit for local context"
+            field={clip.fields.discourse_context}
+            target={clipTarget("discourse_context")}
+            active={isActive(clipTarget("discourse_context"))}
+            expanded
+            onActivate={onActivate}
+            onAccept={accept}
+            onSkip={skip}
+          >
+            <textarea
+              defaultValue={currentValue(clip.fields.discourse_context)}
+              aria-label="Discourse context"
+              rows={2}
+              onBlur={(event) => {
+                const value = event.currentTarget.value.trim();
+                if (
+                  value.length > 0 &&
+                  value !== currentValue(clip.fields.discourse_context)
+                ) {
+                  review(clipTarget("discourse_context"), {
+                    action: "edit",
+                    value,
+                  });
+                }
+              }}
+            />
+          </FieldRow>
+          <FieldRow
+            label="Sentence"
+            hint="Corrected transcript"
+            field={clip.fields.sentence_text}
+            target={clipTarget("sentence_text")}
+            active={isActive(clipTarget("sentence_text"))}
+            onActivate={onActivate}
+            onAccept={accept}
+            onSkip={skip}
+          >
+            <output className="read-only-control" lang="zh-Hans">
+              {currentValue(clip.fields.sentence_text)}
+            </output>
+          </FieldRow>
+          <FieldRow
+            label="Clauses"
+            hint="Separate with |"
+            field={clip.fields.clauses}
+            target={clipTarget("clauses")}
+            active={isActive(clipTarget("clauses"))}
+            onActivate={onActivate}
+            onAccept={accept}
+            onSkip={skip}
+          >
+            <input
+              type="text"
+              defaultValue={currentValue(clip.fields.clauses).join(" | ")}
+              aria-label="Clauses, separated by vertical bars"
+              onBlur={(event) => {
+                const value = event.currentTarget.value
+                  .split("|")
+                  .map((clause) => clause.trim())
+                  .filter(Boolean);
+                if (
+                  value.length > 0 &&
+                  JSON.stringify(value) !==
+                    JSON.stringify(currentValue(clip.fields.clauses))
+                ) {
+                  review(clipTarget("clauses"), {
+                    action: "edit",
+                    value,
+                  });
+                }
+              }}
+            />
+          </FieldRow>
+          <FieldRow
+            label="Function"
+            field={clip.fields.communicative_function}
+            target={clipTarget("communicative_function")}
+            active={isActive(clipTarget("communicative_function"))}
+            onActivate={onActivate}
+            onAccept={accept}
+            onSkip={skip}
+          >
+            <select
+              value={currentValue(clip.fields.communicative_function)}
+              aria-label="Communicative function"
+              onChange={(event) =>
+                review(clipTarget("communicative_function"), {
+                  action: "edit",
+                  value: event.currentTarget.value,
+                })
+              }
+            >
+              {COMMUNICATIVE_FUNCTIONS.map((communicativeFunction) => (
+                <option
+                  value={communicativeFunction}
+                  key={communicativeFunction}
+                >
+                  {humanize(communicativeFunction)}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+          <FieldRow
+            label="Explanation"
+            hint="Evidence-based meaning"
+            field={clip.fields.meaning_explanation}
+            target={clipTarget("meaning_explanation")}
+            active={isActive(clipTarget("meaning_explanation"))}
+            expanded
+            onActivate={onActivate}
+            onAccept={accept}
+            onSkip={skip}
+          >
+            <textarea
+              defaultValue={currentValue(clip.fields.meaning_explanation)}
+              aria-label="Meaning explanation"
+              rows={2}
+              onBlur={(event) => {
+                const value = event.currentTarget.value.trim();
+                if (
+                  value.length > 0 &&
+                  value !== currentValue(clip.fields.meaning_explanation)
+                ) {
+                  review(clipTarget("meaning_explanation"), {
+                    action: "edit",
+                    value,
+                  });
+                }
+              }}
+            />
+          </FieldRow>
+        </InspectorSection>
+      </div>
 
       <footer className="review-footer">
         <div className="review-footer__summary">
@@ -380,6 +542,16 @@ export function FieldInspector({
         >
           <i style={{ width: `${progress}%` }} />
         </div>
+        {liveMessage.length > 0 ? (
+          <p
+            className={`review-feedback${clip.clip.status === "confirmed" ? " review-feedback--success" : ""}`}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {liveMessage}
+          </p>
+        ) : null}
         <div className="keyboard-hints" aria-label="Keyboard shortcuts">
           <span>
             <kbd>C</kbd> confirm field
@@ -388,23 +560,35 @@ export function FieldInspector({
             <kbd>S</kbd> skip
           </span>
           <span>
-            <kbd>N</kbd> next clip
+            <kbd>Q</kbd> queue
           </span>
           <span>
             <kbd>,</kbd>
             <kbd>.</kbd> step frame
           </span>
         </div>
-        <button
-          type="button"
-          className={`button button--confirm${summary.ready ? "" : " button--disabled"}`}
-          aria-disabled={!summary.ready || saveState === "saving"}
-          onClick={onConfirmClip}
-        >
-          {clip.clip.status === "confirmed" ? "Clip confirmed" : "Confirm clip"}
-        </button>
+        {clip.clip.status === "confirmed" ? (
+          <button
+            type="button"
+            className="button button--confirm"
+            onClick={onReturnToQueue}
+          >
+            Return to cleared queue
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`button button--confirm${summary.ready ? "" : " button--disabled"}`}
+            aria-disabled={!summary.ready || saveState === "saving"}
+            onClick={onConfirmClip}
+          >
+            Confirm clip
+          </button>
+        )}
         <p>
-          {summary.ready
+          {clip.clip.status === "confirmed"
+            ? "Confirmed coding is now read-only."
+            : summary.ready
             ? summary.skipped > 0
               ? `${summary.skipped} skipped field${summary.skipped === 1 ? "" : "s"} will remain explicit.`
               : "Every field has a human decision."
@@ -421,10 +605,7 @@ function InspectorSection({
 }: Readonly<{ title: string; children: React.ReactNode }>) {
   return (
     <section className="inspector-section">
-      <h3>
-        {title}
-        <ChevronUp aria-hidden="true" />
-      </h3>
+      <h3>{title}</h3>
       {children}
     </section>
   );
@@ -439,3 +620,7 @@ function formatRangeField(field: ReviewField<TimeRange>): string {
   return formatSourceRange(range.start_ms, range.end_ms);
 }
 
+function humanize(value: string): string {
+  const words = value.replaceAll("_", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}

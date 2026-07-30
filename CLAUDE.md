@@ -95,6 +95,12 @@ rejected      # false positive, excluded from corpus
 
 ## Critical Conventions
 
+**Source of truth:** `docs/product-spec.md` defines product behavior,
+`lib/vocab.ts` defines the TypeScript controlled vocabularies, and
+`src/fp_multimodel/vocab.py` defines the Track A particle and sentence-type
+subset. Keep shared values synchronized and update tests when a vocabulary
+changes.
+
 **Time is stored in milliseconds, always.** Frames are derived for display only. Source video arrives at varying FPS; normalize all input to **30 fps** on ingest with ffmpeg, and store `fps` on the `Video` node. Never store a raw frame number as the canonical value — mixed-FPS sources will silently corrupt alignment.
 
 ```
@@ -105,10 +111,15 @@ frame = round(ms / 1000 * fps)
 
 **Clip naming:**
 ```
-{video_id}_{speaker_id}_{fp_token_pinyin}_{fp_start_ms}
-e.g. vid03_spkA_ne_014230
+{video_id}_{speaker_id}_{addressee_id}_{fp_token_pinyin}_{fp_start_ms}
+e.g. vid03_spkA_spkB_ne_014230
 ```
 Deterministic and collision-proof. Use pinyin, not characters, to keep filenames ASCII-safe.
+
+**Multi-video projects:** a project may contain multiple source videos. Keep
+each video's source timeline, frame rate, speaker namespace, transcript,
+alignment artifacts, and processing state independent. Batch orchestration may
+run videos concurrently, but every downstream artifact must retain `video_id`.
 
 **Multi-particle clips:** a clip may contain more than one FP (`FP_count > 1`). Each particle instance gets its own `CONTAINS_PARTICLE` relationship, and each may pair with a different gesture. Do NOT model this as one gesture per clip.
 
@@ -263,30 +274,26 @@ Important: SFPs are phonologically neutral-tone and unstressed, so the measurabl
 
 Next.js App Router. Frontend and API routes in one repo.
 
-### Routes
+### Implemented routes
 ```
 app/
-├── page.tsx                          Upload / batch ingest
-├── transcripts/[videoId]/page.tsx    Transcript Review (checkpoint 1)
+├── page.tsx                          Product landing / workflow entry
 ├── queue/page.tsx                    Coding Queue
 ├── clips/[clipId]/page.tsx           Coding Interface (checkpoint 2)
-├── graph/page.tsx                    Graph Explorer
-├── insights/page.tsx                 Query + export
+├── explore/page.tsx                  Clip Explorer
 └── api/
-    ├── ingest/route.ts
-    ├── transcripts/[videoId]/route.ts     GET draft, PUT corrections
-    ├── align/route.ts                     trigger MFA after correction
-    ├── clips/route.ts                     GET filtered list
-    ├── clips/[clipId]/route.ts            GET detail, PATCH field confirmations
-    ├── graph/route.ts                     nodes + edges for viz
-    └── query/route.ts                     preset Cypher
+    ├── clips/[clipId]/route.ts        GET detail, PATCH review commands
+    └── demo/reset/route.ts            POST reset demo fixtures
 lib/
-├── neo4j.ts
-├── twelvelabs.ts
-├── openai.ts
-├── vocab.ts        # the enums above, single source of truth
-└── types.ts
+├── track-b/                         Provider-independent gesture pipeline
+├── track-c/                         Demo repository + review state machine
+├── vocab.ts                         TypeScript controlled vocabularies
+└── types.ts                         Track A → Track B contracts
 ```
+
+The transcript review, ingest/alignment, Neo4j graph, insights, and export
+routes described below are planned work. Do not import or call them as if they
+already exist.
 
 ### C1. Transcript Review page
 - Utterance list, editable text field per utterance
@@ -350,6 +357,7 @@ CREATE CONSTRAINT stype_label IF NOT EXISTS FOR (st:SentenceType) REQUIRE st.lab
 
 ### Nodes
 ```
+Project(id, name)
 Video(id, source, duration_ms, fps)
 Utterance(id, text, start_ms, end_ms, transcript_confirmed: bool)
 Clip(id, name, start_ms, end_ms, status, fp_count)
@@ -362,6 +370,7 @@ Tone(contour)
 
 ### Relationships
 ```
+(Project)-[:HAS_VIDEO]->(Video)
 (Video)-[:HAS_UTTERANCE]->(Utterance)
 (Video)-[:HAS_CLIP]->(Clip)
 (Clip)-[:FROM_UTTERANCE]->(Utterance)
@@ -421,6 +430,40 @@ Only ever aggregate over `status: 'confirmed'` clips. Draft data must never appe
 6. Transcript Review (C1)
 7. Insights + export (C5)
 8. Addressee (B5), tone (B6), discourse levels (A7) — last, all are degradable
+
+---
+
+## Repository Workflow
+
+The repository contains two tested runtimes:
+
+- `src/fp_multimodel/`: Python 3.11+ Track A CLI and data contracts
+- `app/`, `components/`, and `lib/`: Next.js/TypeScript Track B and Track C
+
+Use the smallest relevant verification while iterating, then run the complete
+suite before handing off a cross-cutting change:
+
+```bash
+uv sync
+uv run pytest
+
+npm install
+npm test
+npm run typecheck
+npm run build
+```
+
+Do not commit generated state such as `.next/`, `node_modules/`, `.venv/`,
+`__pycache__/`, `.pytest_cache/`, or `tsconfig.tsbuildinfo`.
+
+When changing shared contracts:
+
+1. Preserve `video_id`, `instance_id`, absolute source-video milliseconds, and
+   suggestion provenance across every track boundary.
+2. Keep original AI suggestions after human edits.
+3. Treat `FP_count` as derived from particle instances.
+4. Add or update both Python and TypeScript tests when behavior crosses the
+   Track A/Track B boundary.
 
 ---
 

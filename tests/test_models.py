@@ -2,9 +2,12 @@ import pytest
 from pydantic import ValidationError
 
 from fp_multimodel.models import (
+    Clause,
+    LinguisticContext,
     ParticleDetectionResult,
     ParticleInstance,
     Transcript,
+    TranscriptBatch,
     Utterance,
 )
 
@@ -32,6 +35,29 @@ def test_transcript_rejects_duplicate_utterance_ids() -> None:
     )
     with pytest.raises(ValidationError, match="utterance ids must be unique"):
         Transcript(video_id="vid1", utterances=[utterance, utterance])
+
+
+def test_linguistic_context_validates_clause_ranges() -> None:
+    context = LinguisticContext(
+        discourse_id="d1",
+        discourse_text="A asks whether B has eaten.",
+        sentence_id="s1",
+        sentence_text="你吃饭了吗",
+        clauses=[
+            Clause(id="c1", text="你吃饭了吗", start_char=0, end_char=5),
+        ],
+    )
+
+    assert context.clauses[0].text == "你吃饭了吗"
+
+
+def test_transcript_batch_rejects_duplicate_video_ids() -> None:
+    transcript = Transcript(video_id="vid1", utterances=[])
+    with pytest.raises(ValidationError, match="video ids must be unique"):
+        TranscriptBatch(
+            project_id="project-1",
+            transcripts=[transcript, transcript],
+        )
 
 
 def test_traditional_ma_is_canonicalized_while_surface_text_is_preserved() -> None:

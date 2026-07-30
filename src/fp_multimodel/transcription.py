@@ -13,6 +13,7 @@ from fp_multimodel.models import (
     Milliseconds,
     StrictModel,
     Transcript,
+    TranscriptBatch,
     Utterance,
 )
 
@@ -64,5 +65,27 @@ def create_draft_transcript(
                 transcript_confirmed=False,
             )
             for segment in segments
+        ],
+    )
+
+
+def create_draft_transcript_batch(
+    project_id: str,
+    sources: Sequence[tuple[str, Path]],
+    provider: MandarinAsrProvider,
+) -> TranscriptBatch:
+    """Transcribe multiple videos without merging their source timelines."""
+
+    video_ids = [video_id for video_id, _ in sources]
+    if len(video_ids) != len(set(video_ids)):
+        raise ValueError("video ids must be unique within a transcript batch")
+    if not sources:
+        raise ValueError("a transcript batch requires at least one video")
+
+    return TranscriptBatch(
+        project_id=project_id,
+        transcripts=[
+            create_draft_transcript(video_id, audio, provider)
+            for video_id, audio in sources
         ],
     )

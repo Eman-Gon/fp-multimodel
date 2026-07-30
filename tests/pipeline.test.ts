@@ -5,7 +5,10 @@ import type {
   MotionDetectionRequest,
   SemanticGestureRequest,
 } from "../lib/types.ts";
-import { draftTrackBAnnotations } from "../lib/track-b/pipeline.ts";
+import {
+  draftTrackBAnnotations,
+  draftTrackBBatchAnnotations,
+} from "../lib/track-b/pipeline.ts";
 
 const trackAProvenance = {
   source: "mfa_rule" as const,
@@ -140,4 +143,106 @@ test("rejects duplicate instance IDs before ambiguous graph links are emitted", 
     /duplicate particle instance_id/,
   );
   assert.equal(semanticCallCount, 0);
+});
+
+test("batch analysis preserves each video's identity and source timeline", async () => {
+  const result = await draftTrackBBatchAnnotations(
+    {
+      project_id: "project-1",
+      videos: [
+        {
+          video_id: "vid1",
+          video_duration_ms: 10_000,
+          particle_instances: [
+            {
+              ...trackAProvenance,
+              instance_id: "vid1:fp-1",
+              fp_token: "吗",
+              fp_pinyin: "ma",
+              surface_form: "吗",
+              fp_start_ms: 1_000,
+              fp_end_ms: 1_200,
+              utterance_id: "u1",
+            },
+          ],
+        },
+        {
+          video_id: "vid2",
+          video_duration_ms: 20_000,
+          particle_instances: [
+            {
+              ...trackAProvenance,
+              instance_id: "vid2:fp-1",
+              fp_token: "吧",
+              fp_pinyin: "ba",
+              surface_form: "吧",
+              fp_start_ms: 15_000,
+              fp_end_ms: 15_200,
+              utterance_id: "u1",
+            },
+          ],
+        },
+      ],
+    },
+    {
+      semanticAnalyzer: {
+        async analyzeGesture() {
+          return {
+            gesture_type: "none",
+            gesture_region: null,
+            start_ms: null,
+            end_ms: null,
+            confidence: 0.75,
+          };
+        },
+      },
+      motionAnalyzer: {
+        async detectMotion() {
+          return [];
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(
+    result.map(({ video_id }) => video_id),
+    ["vid1", "vid2"],
+  );
+  assert.equal(result[0]?.annotations[0]?.analysis_window.start_ms, 0);
+  assert.equal(result[1]?.annotations[0]?.analysis_window.start_ms, 13_000);
+});
+
+test("batch analysis rejects duplicate video ids", async () => {
+  await assert.rejects(
+    draftTrackBBatchAnnotations(
+      {
+        project_id: "project-1",
+        videos: [
+          {
+            video_id: "vid1",
+            video_duration_ms: 1_000,
+            particle_instances: [],
+          },
+          {
+            video_id: "vid1",
+            video_duration_ms: 2_000,
+            particle_instances: [],
+          },
+        ],
+      },
+      {
+        semanticAnalyzer: {
+          async analyzeGesture() {
+            throw new Error("not reached");
+          },
+        },
+        motionAnalyzer: {
+          async detectMotion() {
+            throw new Error("not reached");
+          },
+        },
+      },
+    ),
+    /duplicate video_id/,
+  );
 });

@@ -15,6 +15,77 @@ export const TARGET_PARTICLES = [
 export type ParticleToken = (typeof TARGET_PARTICLES)[number]["token"];
 export type ParticlePinyin = (typeof TARGET_PARTICLES)[number]["pinyin"];
 
+/**
+ * Researcher-supplied candidates awaiting orthographic, tokenization, and
+ * functional validation. These are deliberately not accepted as canonical
+ * FP_token values by the production detector yet.
+ */
+export const EXTENDED_PARTICLE_CANDIDATES = [
+  "了",
+  "的",
+  "嘛",
+  "罢了",
+  "而已",
+  "哇",
+  "哪",
+  "呕",
+  "哟",
+  "罢",
+  "呗",
+  "啵",
+  "咯",
+  "啰",
+  "喽",
+  "噢",
+  "喔",
+  "了吗",
+  "了吧",
+  "了呢",
+  "的吗",
+  "的吧",
+  "的呢",
+  "了啊",
+  "的啦",
+  "的嘛",
+  "的哦",
+  "了哦",
+  "吧啊",
+  "呢啊",
+  "吗啊",
+  "啦啊",
+  "呗啊",
+  "吧吗",
+  "呢吧",
+  "了啦",
+  "吧啦",
+  "呢啦",
+  "嘛啦",
+  "哦啦",
+  "了吗吧",
+  "了呢吧",
+  "了的吧",
+  "了吗呢",
+  "了吧呢",
+  "了呢吗",
+  "的了吗",
+  "了吧吗",
+  "的吗呢",
+  "的呢吗",
+  "了的吗",
+  "的了吧",
+  "的呢吧",
+  "了啊吧",
+  "了呢啊",
+  "了吗啊",
+  "了吧啊",
+  "的啦啊",
+  "的哦啊",
+  "了哦啊",
+  "吧了呢",
+  "吗了呢",
+  "呢了吧",
+] as const;
+
 export const GESTURE_TYPES = [
   "head_nod",
   "head_shake",
@@ -64,6 +135,22 @@ export const SENTENCE_TYPES = [
 ] as const;
 
 export type SentenceType = (typeof SENTENCE_TYPES)[number];
+
+export const COMMUNICATIVE_FUNCTIONS = [
+  "confirmation_seeking",
+  "softening",
+  "suggestion",
+  "insistence",
+  "surprise",
+  "shared_context",
+  "emotional_emphasis",
+  "topic_continuation",
+  "other",
+  "uncertain",
+] as const;
+
+export type CommunicativeFunction =
+  (typeof COMMUNICATIVE_FUNCTIONS)[number];
 
 export const CLIP_STATUSES = [
   "draft",

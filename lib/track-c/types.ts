@@ -1,5 +1,6 @@
 import type {
   ClipStatus,
+  CommunicativeFunction,
   GestureRegion,
   GestureType,
   ParticleToken,
@@ -49,6 +50,8 @@ export interface ReviewField<T> {
 export interface ParticipantOption {
   readonly id: string;
   readonly label: string;
+  readonly region: string | null;
+  readonly region_confirmed: boolean;
 }
 
 export interface ClipLevelFields {
@@ -57,6 +60,11 @@ export interface ClipLevelFields {
   fp_count: ReviewField<number>;
   sentence_type: ReviewField<SentenceType>;
   tone_contour: ReviewField<ToneContour>;
+  discourse_context: ReviewField<string>;
+  sentence_text: ReviewField<string>;
+  clauses: ReviewField<readonly string[]>;
+  communicative_function: ReviewField<CommunicativeFunction>;
+  meaning_explanation: ReviewField<string>;
 }
 
 export interface ParticleReviewFields {
@@ -76,7 +84,7 @@ export interface ParticleReview {
 }
 
 export interface ClipDetail {
-  readonly schema_version: 1;
+  readonly schema_version: 2;
   version: number;
   readonly demo_fixture: boolean;
   readonly fixture_note: string;
@@ -103,12 +111,43 @@ export interface ClipDetail {
   readonly particle_instances: readonly ParticleReview[];
 }
 
+export interface ClipListItem {
+  readonly id: string;
+  readonly name: string;
+  readonly video_id: string;
+  readonly transcript: string;
+  readonly particle: ParticleToken;
+  readonly particle_pinyin: string;
+  readonly communicative_function: CommunicativeFunction;
+  readonly sentence_type: SentenceType;
+  readonly speaker_id: string;
+  readonly speaker_label: string;
+  readonly status: ClipStatus;
+  readonly lowest_confidence: number | null;
+  readonly duration_ms: number;
+}
+
+export interface VideoSourceReference {
+  readonly id: string;
+  readonly platform: "youtube" | "local" | "other";
+  readonly source_url: string;
+  readonly title: string | null;
+  readonly status: "reference" | "ingested" | "excluded";
+  readonly speaker_regions: readonly string[];
+  readonly region_verification: "unverified" | "researcher_confirmed";
+}
+
 export type ClipFieldName =
   | "speaker_id"
   | "addressee_id"
   | "fp_count"
   | "sentence_type"
-  | "tone_contour";
+  | "tone_contour"
+  | "discourse_context"
+  | "sentence_text"
+  | "clauses"
+  | "communicative_function"
+  | "meaning_explanation";
 
 export type ParticleFieldName =
   | "fp_token"
@@ -169,4 +208,3 @@ export interface ReviewSummary {
   readonly ready: boolean;
   readonly blocking_fields: readonly FieldTarget[];
 }
-

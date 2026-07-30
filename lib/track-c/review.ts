@@ -1,4 +1,5 @@
 import {
+  COMMUNICATIVE_FUNCTIONS,
   GESTURE_REGIONS,
   GESTURE_TYPES,
   SENTENCE_TYPES,
@@ -48,6 +49,11 @@ export function listReviewUnits(clip: ClipDetail): readonly ReviewUnit[] {
     clipUnit(clip, "fp_count", "FP count"),
     clipUnit(clip, "sentence_type", "Sentence type"),
     clipUnit(clip, "tone_contour", "Tone contour"),
+    clipUnit(clip, "discourse_context", "Discourse context"),
+    clipUnit(clip, "sentence_text", "Sentence"),
+    clipUnit(clip, "clauses", "Clauses"),
+    clipUnit(clip, "communicative_function", "Communicative function"),
+    clipUnit(clip, "meaning_explanation", "Meaning explanation"),
   ];
 
   for (const [index, particle] of clip.particle_instances.entries()) {
@@ -102,6 +108,17 @@ export function applyClipCommand(
       "The clip changed after this review action was prepared.",
       409,
       { current_version: current.version },
+    );
+  }
+
+  if (
+    current.clip.status === "confirmed" &&
+    command.command === "review_field"
+  ) {
+    throw new ReviewCommandError(
+      "CLIP_CONFIRMED_READ_ONLY",
+      "Confirmed coding is read-only. Reset the demo before making another review pass.",
+      409,
     );
   }
 
@@ -303,6 +320,41 @@ function validateFieldValue(
         "Tone contour must use the controlled vocabulary.",
       );
     }
+    if (
+      target.field === "communicative_function" &&
+      !includesString(COMMUNICATIVE_FUNCTIONS, value)
+    ) {
+      throw new ReviewCommandError(
+        "INVALID_COMMUNICATIVE_FUNCTION",
+        "Communicative function must use the controlled vocabulary.",
+      );
+    }
+    if (target.field === "clauses") {
+      if (
+        !Array.isArray(value) ||
+        value.length === 0 ||
+        !value.every(
+          (clause) => typeof clause === "string" && clause.trim().length > 0,
+        )
+      ) {
+        throw new ReviewCommandError(
+          "INVALID_CLAUSES",
+          "Clauses must be a non-empty list of non-empty strings.",
+        );
+      }
+    }
+    if (
+      target.field === "discourse_context" ||
+      target.field === "sentence_text" ||
+      target.field === "meaning_explanation"
+    ) {
+      if (typeof value !== "string" || value.trim().length === 0) {
+        throw new ReviewCommandError(
+          "INVALID_TEXT_FIELD",
+          "Linguistic context and explanations cannot be empty.",
+        );
+      }
+    }
     return;
   }
 
@@ -408,4 +460,3 @@ function includesString(
 function isSameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
-

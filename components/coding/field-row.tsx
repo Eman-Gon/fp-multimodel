@@ -13,6 +13,7 @@ interface FieldRowProps {
   readonly field: ReviewField<unknown>;
   readonly target: FieldTarget;
   readonly active: boolean;
+  readonly expanded?: boolean;
   readonly hint?: string;
   readonly children: ReactNode;
   readonly onActivate: (target: FieldTarget) => void;
@@ -25,6 +26,7 @@ export function FieldRow({
   field,
   target,
   active,
+  expanded = false,
   hint,
   children,
   onActivate,
@@ -48,6 +50,7 @@ export function FieldRow({
         "field-row",
         `field-row--${field.state}`,
         active ? "field-row--active" : "",
+        expanded ? "field-row--expanded" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -73,14 +76,16 @@ export function FieldRow({
               ? `${label} is confirmed`
               : `Confirm ${label}`
         }
-        aria-pressed={field.state === "confirmed"}
+        disabled={field.state === "confirmed"}
         title={statusLabel}
       >
         {field.state === "confirmed" ? (
           <Check aria-hidden="true" />
         ) : field.state === "skipped" ? (
           <Minus aria-hidden="true" />
-        ) : null}
+        ) : (
+          <Check className="provenance__confirm-hint" aria-hidden="true" />
+        )}
         <span className="visually-hidden">{statusLabel}</span>
       </button>
       <div className="field-row__control">{children}</div>
@@ -110,4 +115,3 @@ export function FieldRow({
     </div>
   );
 }
-

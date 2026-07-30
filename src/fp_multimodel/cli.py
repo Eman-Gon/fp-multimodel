@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from fp_multimodel.corpus import prepare_mfa_corpus
-from fp_multimodel.jsonio import load_transcript, write_model
+from fp_multimodel.jsonio import load_transcript, load_transcript_batch, write_model
 from fp_multimodel.media import normalize_media
 from fp_multimodel.mfa import align_corpus, download_mandarin_models
 from fp_multimodel.pipeline import detect_from_mfa_output
@@ -29,6 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="validate a draft or reviewed transcript JSON file",
     )
     validate.add_argument("transcript", type=Path)
+
+    validate_batch = subparsers.add_parser(
+        "validate-transcript-batch",
+        help="validate a project JSON file containing multiple video transcripts",
+    )
+    validate_batch.add_argument("batch", type=Path)
 
     normalize = subparsers.add_parser(
         "normalize",
@@ -86,6 +92,17 @@ def _dispatch(args: argparse.Namespace) -> None:
         print(
             f"valid transcript: {transcript.video_id} "
             f"({confirmed}/{len(transcript.utterances)} utterances confirmed)"
+        )
+        return
+
+    if args.command == "validate-transcript-batch":
+        batch = load_transcript_batch(args.batch)
+        utterance_count = sum(
+            len(transcript.utterances) for transcript in batch.transcripts
+        )
+        print(
+            f"valid transcript batch: {batch.project_id} "
+            f"({len(batch.transcripts)} videos, {utterance_count} utterances)"
         )
         return
 
@@ -156,4 +173,3 @@ def main(argv: Sequence[str] | None = None) -> None:
 
 if __name__ == "__main__":
     main()
-

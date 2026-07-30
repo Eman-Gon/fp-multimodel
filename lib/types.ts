@@ -83,6 +83,16 @@ export interface TrackBRequest {
   readonly particle_instances: readonly FinalParticleInstance[];
 }
 
+export interface TrackBBatchRequest {
+  readonly project_id: string;
+  readonly videos: readonly TrackBRequest[];
+}
+
+export interface TrackBVideoDraft {
+  readonly video_id: string;
+  readonly annotations: readonly GestureAnnotationDraft[];
+}
+
 /**
  * Keeps Track A metadata available to graph/coding consumers while exposing
  * the narrow request needed by the Track B analyzer.

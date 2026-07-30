@@ -7,7 +7,7 @@ import {
   summarizeReview,
   targetKey,
 } from "../lib/track-c/review.ts";
-import { createDemoClip } from "../lib/track-c/seed.ts";
+import { createDemoClip, createDemoClips } from "../lib/track-c/seed.ts";
 import type {
   ClipDetail,
   FieldTarget,
@@ -23,13 +23,13 @@ const ADDRESSEE: FieldTarget = {
   field: "addressee_id",
 };
 
-test("seeded clip exposes 11 independent review units and honest gating", () => {
+test("seeded clip exposes multimodal meaning fields and honest gating", () => {
   const clip = createDemoClip();
   const summary = summarizeReview(clip);
 
-  assert.equal(summary.total, 11);
-  assert.equal(summary.confirmed, 5);
-  assert.equal(summary.remaining, 6);
+  assert.equal(summary.total, 16);
+  assert.equal(summary.confirmed, 6);
+  assert.equal(summary.remaining, 10);
   assert.equal(summary.ready, false);
   assert.equal(clip.demo_fixture, true);
 });
@@ -113,6 +113,39 @@ test("confirmation refuses unresolved AI suggestions", () => {
   );
 });
 
+test("confirmed coding is read-only until the demo is reset", () => {
+  let clip = createDemoClip();
+  for (const unit of listReviewUnits(clip)) {
+    if (unit.field.state !== "suggested") {
+      continue;
+    }
+    clip = applyClipCommand(clip, {
+      expected_version: clip.version,
+      command: "review_field",
+      target: unit.target,
+      review: { action: "accept" },
+    });
+  }
+  clip = applyClipCommand(clip, {
+    expected_version: clip.version,
+    command: "confirm_clip",
+  });
+
+  assert.equal(clip.clip.status, "confirmed");
+  assert.throws(
+    () =>
+      applyClipCommand(clip, {
+        expected_version: clip.version,
+        command: "review_field",
+        target: ADDRESSEE,
+        review: { action: "accept" },
+      }),
+    (error: unknown) =>
+      error instanceof ReviewCommandError &&
+      error.code === "CLIP_CONFIRMED_READ_ONLY",
+  );
+});
+
 test("invalid or out-of-bounds ranges are rejected", () => {
   const clip = createDemoClip();
   const instanceId = clip.particle_instances[0]!.instance_id;
@@ -167,11 +200,28 @@ test("multi-particle review keys preserve instance pairing", () => {
     )
     .map(({ target }) => targetKey(target));
 
-  assert.equal(units.length, 17);
+  assert.equal(units.length, 22);
   assert.deepEqual(fpTimingKeys, [
     `particle:${first.instance_id}:fp_timing`,
     `particle:${second.instance_id}:fp_timing`,
   ]);
+});
+
+test("demo corpus contains clips from multiple independent videos", () => {
+  const clips = createDemoClips();
+
+  assert.equal(clips.length, 2);
+  assert.deepEqual(
+    clips.map(({ video }) => video.id),
+    ["vid03", "vid04"],
+  );
+  assert.equal(new Set(clips.map(({ clip }) => clip.name)).size, 2);
+  assert.deepEqual(
+    clips.map(({ particle_instances }) =>
+      particle_instances[0]?.fields.fp_token.value,
+    ),
+    ["吗", "吧"],
+  );
 });
 
 test("frame conversion steps from canonical source time without drift", () => {
@@ -210,4 +260,3 @@ function confirmedField<T>(value: T): ReviewField<T> {
     },
   };
 }
-

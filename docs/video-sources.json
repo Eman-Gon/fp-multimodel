@@ -1,0 +1,15 @@
+{
+  "project_id": "final-particle-gesture-coder",
+  "sources": [
+    {
+      "id": "yt_OvX0ccTNYDs",
+      "platform": "youtube",
+      "source_url": "https://www.youtube.com/watch?v=OvX0ccTNYDs",
+      "title": null,
+      "status": "reference",
+      "speaker_regions": [],
+      "region_verification": "unverified",
+      "note": "Public reference supplied by the researcher. Verify title, speaker consent/status, native-language background, and regional origin before corpus ingest."
+    }
+  ]
+}

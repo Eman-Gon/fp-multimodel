@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import type { TimeRange } from "@/lib/types.ts";
 import {
   applyClipCommand,
@@ -18,6 +18,7 @@ import type {
   FieldTarget,
 } from "@/lib/track-c/types.ts";
 import { FieldInspector } from "./field-inspector.tsx";
+import { MeaningContext } from "./meaning-context.tsx";
 import { TimelineEditor } from "./timeline-editor.tsx";
 import { TranscriptContext } from "./transcript-context.tsx";
 import { useClipPlayer } from "./use-clip-player.ts";
@@ -113,13 +114,21 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
   );
 
   const reviewField = useCallback(
-    (target: FieldTarget, review: FieldReview): ClipDetail | null =>
-      runCommand({
+    (target: FieldTarget, review: FieldReview): ClipDetail | null => {
+      if (clipRef.current.clip.status === "confirmed") {
+        setLiveMessage(
+          "This confirmed clip is read-only. Reset the demo from the queue to rehearse again.",
+        );
+        return null;
+      }
+
+      return runCommand({
         expected_version: clipRef.current.version,
         command: "review_field",
         target,
         review,
-      }),
+      });
+    },
     [runCommand],
   );
 
@@ -197,12 +206,17 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
     try {
       await saveQueueRef.current;
       router.push("/queue");
+      router.refresh();
     } catch {
       setLiveMessage("Resolve the save error before leaving this clip.");
     }
   }, [router]);
 
   const confirmClip = useCallback(() => {
+    if (clipRef.current.clip.status === "confirmed") {
+      void navigateToQueue();
+      return;
+    }
     const currentSummary = summarizeReview(clipRef.current);
     if (!currentSummary.ready || saveState === "saving") {
       const firstBlocking = currentSummary.blocking_fields[0];
@@ -224,7 +238,7 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
     if (next !== null) {
       setLiveMessage("Clip confirmed. The reviewed coding is ready to store.");
     }
-  }, [focusTarget, runCommand, saveState]);
+  }, [focusTarget, navigateToQueue, runCommand, saveState]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -254,7 +268,7 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
       } else if (key === "s") {
         event.preventDefault();
         skipActive();
-      } else if (key === "n") {
+      } else if (key === "q") {
         event.preventDefault();
         void navigateToQueue();
       }
@@ -276,7 +290,14 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
       <header className="workspace-bar">
         <div className="workspace-bar__brand">
           <strong>Final Particle Lab</strong>
-          <span>{clip.fixture_note}</span>
+          <span>
+            Demo workspace ·{" "}
+            {saveState === "saving"
+              ? "Saving changes…"
+              : saveState === "error"
+                ? "Save needs attention"
+                : "All changes saved"}
+          </span>
         </div>
         <div className="workspace-bar__sequence">
           <button
@@ -288,25 +309,24 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
             <ChevronLeft aria-hidden="true" />
           </button>
           <div>
-            <span>Clip 03 of 18</span>
-            <small>{clip.clip.name}</small>
+            <span>Review clip</span>
+            <small>Demo review · human confirmation</small>
           </div>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Next clip"
-            onClick={() => void navigateToQueue()}
-          >
-            <ChevronRight aria-hidden="true" />
-          </button>
         </div>
         <button
           type="button"
-          className={`button workspace-bar__confirm${summary.ready ? " button--primary" : " button--disabled"}`}
-          aria-disabled={!summary.ready || saveState === "saving"}
-          onClick={confirmClip}
+          className={`button workspace-bar__confirm${summary.ready || clip.clip.status === "confirmed" ? " button--primary" : " button--disabled"}`}
+          aria-disabled={
+            clip.clip.status !== "confirmed" &&
+            (!summary.ready || saveState === "saving")
+          }
+          onClick={
+            clip.clip.status === "confirmed"
+              ? () => void navigateToQueue()
+              : confirmClip
+          }
         >
-          {clip.clip.status === "confirmed" ? "Clip confirmed" : "Confirm clip"}
+          {clip.clip.status === "confirmed" ? "Return to queue" : "Confirm clip"}
         </button>
       </header>
 
@@ -326,6 +346,7 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
             fps={clip.video.fps}
             particleTiming={particle.fields.fp_timing}
             gestureTiming={particle.fields.gesture_timing}
+            disabled={clip.clip.status === "confirmed"}
             onSeek={player.seekSourceMs}
             onActivate={(field) =>
               setActiveTarget({
@@ -349,22 +370,22 @@ export function CodingWorkspace({ initialClip }: CodingWorkspaceProps) {
             text={clip.utterance.text}
             particle={currentParticleToken(particle)}
           />
+          <MeaningContext clip={clip} />
         </div>
         <FieldInspector
           clip={clip}
           activeTarget={activeTarget}
           summary={summary}
           saveState={saveState}
+          liveMessage={liveMessage}
           onActivate={setActiveTarget}
           onReview={(target, review) => {
             reviewField(target, review);
           }}
           onConfirmClip={confirmClip}
+          onReturnToQueue={() => void navigateToQueue()}
         />
       </div>
-      <p className="visually-hidden" aria-live="polite" aria-atomic="true">
-        {liveMessage}
-      </p>
     </main>
   );
 }
@@ -374,4 +395,3 @@ function currentParticleToken(
 ): string {
   return particle.fields.fp_token.value ?? particle.fields.fp_token.suggestion.value;
 }
-

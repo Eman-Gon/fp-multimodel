@@ -24,6 +24,7 @@ interface TimelineEditorProps {
   readonly fps: number;
   readonly particleTiming: ReviewField<TimeRange>;
   readonly gestureTiming: ReviewField<TimeRange>;
+  readonly disabled: boolean;
   readonly onSeek: (sourceMilliseconds: number) => void;
   readonly onCommit: (
     field: "fp_timing" | "gesture_timing",
@@ -39,6 +40,7 @@ export function TimelineEditor({
   fps,
   particleTiming,
   gestureTiming,
+  disabled,
   onSeek,
   onCommit,
   onActivate,
@@ -84,9 +86,39 @@ export function TimelineEditor({
           type="button"
           className="timeline__ruler"
           onClick={(event) => {
+            if (event.detail === 0) {
+              return;
+            }
             const rect = event.currentTarget.getBoundingClientRect();
-            const percent = (event.clientX - rect.left) / rect.width;
+            const percent = clamp(
+              (event.clientX - rect.left) / rect.width,
+              0,
+              1,
+            );
             onSeek(clipStartMs + Math.round(percent * durationMs));
+          }}
+          onKeyDown={(event) => {
+            const frameMs = Math.max(1, Math.round(1_000 / fps));
+            if (event.key === "Home") {
+              event.preventDefault();
+              onSeek(clipStartMs);
+            } else if (event.key === "End") {
+              event.preventDefault();
+              onSeek(clipEndMs);
+            } else if (
+              event.key === "ArrowLeft" ||
+              event.key === "ArrowRight"
+            ) {
+              event.preventDefault();
+              onSeek(
+                clamp(
+                  currentSourceMs +
+                    (event.key === "ArrowLeft" ? -frameMs : frameMs),
+                  clipStartMs,
+                  clipEndMs,
+                ),
+              );
+            }
           }}
           aria-label="Seek on clip timeline"
         >
@@ -112,6 +144,7 @@ export function TimelineEditor({
           clipStartMs={clipStartMs}
           clipEndMs={clipEndMs}
           fps={fps}
+          disabled={disabled}
           onCommit={onCommit}
           onActivate={onActivate}
         />
@@ -123,6 +156,7 @@ export function TimelineEditor({
           clipStartMs={clipStartMs}
           clipEndMs={clipEndMs}
           fps={fps}
+          disabled={disabled}
           onCommit={onCommit}
           onActivate={onActivate}
         />
@@ -139,6 +173,7 @@ interface RangeTrackProps {
   readonly clipStartMs: number;
   readonly clipEndMs: number;
   readonly fps: number;
+  readonly disabled: boolean;
   readonly onCommit: (
     field: "fp_timing" | "gesture_timing",
     value: TimeRange,
@@ -154,6 +189,7 @@ function RangeTrack({
   clipStartMs,
   clipEndMs,
   fps,
+  disabled,
   onCommit,
   onActivate,
 }: RangeTrackProps) {
@@ -250,6 +286,7 @@ function RangeTrack({
     <fieldset
       className={`range-track ${className}`}
       onFocusCapture={() => onActivate(fieldName)}
+      disabled={disabled}
     >
       <legend>
         <span>{label}</span>

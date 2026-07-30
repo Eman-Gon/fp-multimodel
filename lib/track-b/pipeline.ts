@@ -1,7 +1,9 @@
 import type {
   GestureAnnotationDraft,
+  TrackBBatchRequest,
   TrackBDependencies,
   TrackBRequest,
+  TrackBVideoDraft,
 } from "../types.ts";
 import { createGestureAnalysisWindow } from "./analysis-window.ts";
 import {
@@ -73,4 +75,34 @@ export async function draftTrackBAnnotations(
   }
 
   return drafts;
+}
+
+/**
+ * Analyze every video in a project without combining source timelines or
+ * participant namespaces. Independent videos can run concurrently.
+ */
+export async function draftTrackBBatchAnnotations(
+  request: TrackBBatchRequest,
+  dependencies: TrackBDependencies,
+): Promise<readonly TrackBVideoDraft[]> {
+  assertNonEmptyId(request.project_id, "request.project_id");
+  if (request.videos.length === 0) {
+    throw new RangeError("request.videos must contain at least one video");
+  }
+
+  const seenVideoIds = new Set<string>();
+  for (const video of request.videos) {
+    assertNonEmptyId(video.video_id, "request.videos[].video_id");
+    if (seenVideoIds.has(video.video_id)) {
+      throw new RangeError(`duplicate video_id: ${video.video_id}`);
+    }
+    seenVideoIds.add(video.video_id);
+  }
+
+  return Promise.all(
+    request.videos.map(async (video) => ({
+      video_id: video.video_id,
+      annotations: await draftTrackBAnnotations(video, dependencies),
+    })),
+  );
 }
