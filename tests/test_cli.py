@@ -139,3 +139,19 @@ def test_transcribe_dispatch_writes_the_provider_draft(
     assert calls["video_id"] == "vid03"
     assert calls["speaker"] == "spk_unknown"
     assert calls["overwrite"] is True
+
+
+def test_transcribe_keeps_draft_in_the_video_scoped_directory() -> None:
+    args = build_parser().parse_args(
+        [
+            "transcribe",
+            "work/vid03/audio.wav",
+            "--video-id",
+            "vid03",
+            "--output",
+            "other/transcript.draft.json",
+        ]
+    )
+
+    with pytest.raises(ValueError, match="must stay in the source video's directory"):
+        cli._dispatch(args)

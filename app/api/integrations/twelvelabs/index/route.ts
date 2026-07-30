@@ -2,6 +2,7 @@ import type {
   TwelveLabsAsset,
   TwelveLabsIndexedAsset,
 } from "@/lib/twelvelabs/client.ts";
+import { TwelveLabsError } from "@/lib/twelvelabs/errors.ts";
 import {
   createTwelveLabsClient,
   integrationErrorResponse,
@@ -99,6 +100,13 @@ export async function POST(request: Request): Promise<Response> {
           parsed.index_id,
           parsed.indexed_asset_id,
         );
+        if (indexedAsset.asset_id !== parsed.asset_id) {
+          throw new TwelveLabsError(
+            "TWELVELABS_INVALID_RESPONSE",
+            "TwelveLabs returned indexing state for a different source asset.",
+            502,
+          );
+        }
         return indexingResponse(parsed, indexedAsset);
       }
     }
@@ -319,4 +327,3 @@ function indexingResponse(
     { status: status === "processing" ? 202 : httpStatus },
   );
 }
-

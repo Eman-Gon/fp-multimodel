@@ -227,6 +227,30 @@ def test_confirmed_asr_transcript_requires_human_review_and_speaker_profile() ->
             ],
         )
 
+    wrong_artifact_review = review.model_copy(
+        update={"suggestion_artifact_sha256": "d" * 64}
+    )
+    with pytest.raises(ValidationError, match="reference the original ASR"):
+        Transcript(
+            video_id="vid1",
+            transcript_origin="asr",
+            asr_suggestion=suggestion,
+            asr_suggestion_artifact_sha256="c" * 64,
+            speakers=[SpeakerProfile(id="spkA", label="Speaker A")],
+            utterances=[
+                Utterance(
+                    id="u1",
+                    start_ms=1000,
+                    end_ms=2000,
+                    text="你好吗",
+                    speaker="spkA",
+                    source_segment_ids=["source-1"],
+                    transcript_confirmed=True,
+                    transcript_review=wrong_artifact_review,
+                )
+            ],
+        )
+
     accepted = Transcript(
         video_id="vid1",
         transcript_origin="asr",

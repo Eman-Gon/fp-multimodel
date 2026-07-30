@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from fp_multimodel.manifest import TrackAManifest, load_manifest, write_manifest
 from fp_multimodel.mfa import (
     ACOUSTIC_MODEL,
@@ -57,3 +60,26 @@ def test_aligns_with_required_models(tmp_path: Path) -> None:
     assert manifest.normalized_video_sha256 == "c" * 64
     assert manifest.dictionary_model == DICTIONARY_MODEL
     assert manifest.acoustic_model == ACOUSTIC_MODEL
+
+
+def test_track_a_manifest_v1_requires_regeneration(tmp_path: Path) -> None:
+    (tmp_path / "track-a-manifest.json").write_text(
+        """
+        {
+          "schema_version": 1,
+          "stage": "corpus",
+          "video_id": "vid1",
+          "duration_ms": 20000,
+          "fps": 30,
+          "transcript_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_audio_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "normalized_video_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "dictionary_model": null,
+          "acoustic_model": null
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="schema_version"):
+        load_manifest(tmp_path, expected_stage="corpus")

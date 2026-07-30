@@ -310,6 +310,7 @@ export function parseGestureSuggestionPayload(
 
 function nestedSuggestion(envelope: Record<string, unknown>) {
   const nested =
+    (isRecord(envelope.annotation) ? envelope.annotation : null) ??
     (isRecord(envelope.result) ? envelope.result : null) ??
     (isRecord(envelope.suggestion) ? envelope.suggestion : null) ??
     envelope;

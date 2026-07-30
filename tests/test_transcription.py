@@ -229,6 +229,28 @@ def test_loading_rejects_changed_or_discarded_original_asr_suggestion(
         load_transcript(discarded_path)
 
 
+def test_loading_rejects_a_modified_content_addressed_sidecar(
+    tmp_path: Path,
+) -> None:
+    draft = create_draft_transcript(
+        "vid1",
+        make_verified_audio(tmp_path),
+        FakeMandarinAsr(),
+    )
+    draft_path = tmp_path / "transcript.draft.json"
+    draft_path.write_text(draft.model_dump_json(indent=2), encoding="utf-8")
+    assert draft.asr_suggestion_artifact_sha256 is not None
+    artifact_path = (
+        tmp_path
+        / ASR_SUGGESTION_DIRECTORY
+        / f"{draft.asr_suggestion_artifact_sha256}.json"
+    )
+    artifact_path.write_bytes(artifact_path.read_bytes() + b" ")
+
+    with pytest.raises(ValueError, match="failed its SHA-256 check"):
+        load_transcript(draft_path)
+
+
 def test_loading_rejects_legacy_transcript_without_explicit_origin(
     tmp_path: Path,
 ) -> None:
@@ -240,6 +262,26 @@ def test_loading_rejects_legacy_transcript_without_explicit_origin(
 
     with pytest.raises(ValueError, match="requires explicit transcript_origin"):
         load_transcript(path)
+
+
+@pytest.mark.parametrize(
+    "filename, expected_confirmed",
+    [
+        ("transcript.draft.json", False),
+        ("transcript.reviewed.json", True),
+    ],
+)
+def test_committed_transcript_examples_validate_and_round_trip(
+    filename: str,
+    expected_confirmed: bool,
+) -> None:
+    path = Path(__file__).parents[1] / "examples" / filename
+
+    transcript = load_transcript(path)
+    round_tripped = Transcript.model_validate_json(transcript.model_dump_json())
+
+    assert transcript.utterances[0].transcript_confirmed is expected_confirmed
+    assert transcript_sha256(round_tripped) == transcript_sha256(transcript)
 
 
 def test_multiple_videos_remain_separate_in_a_draft_batch(tmp_path: Path) -> None:
@@ -255,6 +297,160 @@ def test_multiple_videos_remain_separate_in_a_draft_batch(tmp_path: Path) -> Non
     assert [item.video_id for item in batch.transcripts] == ["vid1", "vid2"]
     assert all(item.utterances[0].start_ms == 12_400 for item in batch.transcripts)
     assert all(item.asr_suggestion is not None for item in batch.transcripts)
+
+
+def test_review_lineage_supports_segment_splits_and_merges(tmp_path: Path) -> None:
+    split_directory = tmp_path / "split"
+    split_draft = create_draft_transcript(
+        "vid1",
+        make_verified_audio(split_directory),
+        FakeMandarinAsr(),
+    )
+    assert split_draft.asr_suggestion_artifact_sha256 is not None
+    review = {
+        "action": "edit",
+        "reviewer_id": "researcher-1",
+        "reviewed_at": "2026-07-30T20:00:00Z",
+        "suggestion_artifact_sha256": (
+            split_draft.asr_suggestion_artifact_sha256
+        ),
+        "evidence": "Reviewed segmentation.",
+    }
+    split_payload = split_draft.model_dump(mode="json")
+    split_payload["speakers"] = [
+        {
+            "id": "spkA",
+            "label": "Speaker A",
+            "region": None,
+            "region_source": None,
+            "region_confirmed": False,
+        }
+    ]
+    split_payload["utterances"] = [
+        {
+            "id": "u1-left",
+            "start_ms": 12_400,
+            "end_ms": 13_700,
+            "text": "你吃飯了",
+            "surface_text": "你吃飯了",
+            "speaker": "spkA",
+            "confidence": 0.82,
+            "source_segment_ids": ["u1"],
+            "transcript_confirmed": True,
+            "transcript_review": review,
+            "linguistic_context": None,
+        },
+        {
+            "id": "u1-right",
+            "start_ms": 13_700,
+            "end_ms": 15_100,
+            "text": "嗎",
+            "surface_text": "嗎",
+            "speaker": "spkA",
+            "confidence": 0.82,
+            "source_segment_ids": ["u1"],
+            "transcript_confirmed": True,
+            "transcript_review": review,
+            "linguistic_context": None,
+        },
+    ]
+    split_path = split_directory / "transcript.reviewed.json"
+    split_path.write_text(
+        json.dumps(split_payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    split = load_transcript(split_path)
+    assert [item.source_segment_ids for item in split.utterances] == [
+        ["u1"],
+        ["u1"],
+    ]
+
+    class TwoSegmentAsr:
+        def transcribe(self, audio: Path) -> AsrRun:
+            provider_output_json = json.dumps(
+                {
+                    "segments": [
+                        {"id": 1, "text": "你吃飯了"},
+                        {"id": 2, "text": "嗎"},
+                    ]
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            return AsrRun(
+                provider="fake_mandarin_asr",
+                model="fake-model-1",
+                language="zh",
+                task="transcribe",
+                confidence_method="provider",
+                provider_output_sha256=hashlib.sha256(
+                    provider_output_json.encode("utf-8")
+                ).hexdigest(),
+                provider_output_json=provider_output_json,
+                segments=(
+                    AsrSegment(
+                        id="u1",
+                        provider_segment_id="1",
+                        start_ms=12_400,
+                        end_ms=13_700,
+                        text="你吃飯了",
+                        confidence=0.8,
+                    ),
+                    AsrSegment(
+                        id="u2",
+                        provider_segment_id="2",
+                        start_ms=13_700,
+                        end_ms=15_100,
+                        text="嗎",
+                        confidence=0.8,
+                    ),
+                ),
+            )
+
+    merge_directory = tmp_path / "merge"
+    merge_draft = create_draft_transcript(
+        "vid2",
+        make_verified_audio(merge_directory, video_id="vid2"),
+        TwoSegmentAsr(),
+    )
+    assert merge_draft.asr_suggestion_artifact_sha256 is not None
+    merge_payload = merge_draft.model_dump(mode="json")
+    merge_payload["speakers"] = [
+        {
+            "id": "spkA",
+            "label": "Speaker A",
+            "region": None,
+            "region_source": None,
+            "region_confirmed": False,
+        }
+    ]
+    merge_payload["utterances"] = [
+        {
+            "id": "u-merged",
+            "start_ms": 12_400,
+            "end_ms": 15_100,
+            "text": "你吃飯了嗎",
+            "surface_text": "你吃飯了嗎",
+            "speaker": "spkA",
+            "confidence": 0.8,
+            "source_segment_ids": ["u1", "u2"],
+            "transcript_confirmed": True,
+            "transcript_review": {
+                **review,
+                "suggestion_artifact_sha256": (
+                    merge_draft.asr_suggestion_artifact_sha256
+                ),
+            },
+            "linguistic_context": None,
+        }
+    ]
+    merge_path = merge_directory / "transcript.reviewed.json"
+    merge_path.write_text(
+        json.dumps(merge_payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    merged = load_transcript(merge_path)
+    assert merged.utterances[0].source_segment_ids == ["u1", "u2"]
 
 
 def test_draft_transcription_rejects_cross_video_mutated_and_out_of_bounds_audio(

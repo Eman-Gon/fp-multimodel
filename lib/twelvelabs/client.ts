@@ -138,7 +138,13 @@ export class TwelveLabsClient {
     const raw = await this.#request(`/assets/${encodeURIComponent(assetId)}`, {
       method: "GET",
     });
-    return parseAsset(raw);
+    const asset = parseAsset(raw);
+    if (asset.id !== assetId) {
+      throw invalidProviderResponse(
+        "TwelveLabs returned an asset with a mismatched identifier.",
+      );
+    }
+    return asset;
   }
 
   async indexAsset(
@@ -160,6 +166,11 @@ export class TwelveLabsClient {
       },
     );
     const value = parseIndexedAssetIdentity(raw);
+    if (value.asset_id !== request.asset_id) {
+      throw invalidProviderResponse(
+        "TwelveLabs returned an indexed asset for a different source asset.",
+      );
+    }
     return { ...value, status: "queued" };
   }
 

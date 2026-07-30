@@ -115,6 +115,12 @@ export function GraphExplorer({
     setSearch("");
   }, [dataset]);
 
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 780px)").matches) {
+      setFiltersOpen(false);
+    }
+  }, []);
+
   const selectNode = (nodeId: string | null) => {
     setSelectedNodeId(nodeId);
     if (nodeId !== null) {

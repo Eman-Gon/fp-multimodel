@@ -109,7 +109,10 @@ export function ClipExplorer({ clips, sourceReferences }: ClipExplorerProps) {
               }}
             >
               <strong>All</strong>
-              <span>{reviewedClipCount} clips</span>
+              <span>
+                {reviewedClipCount}{" "}
+                {reviewedClipCount === 1 ? "clip" : "clips"}
+              </span>
             </button>
             {TARGET_PARTICLES.map(({ token, pinyin }) => {
               const count = uniqueClipCount(
