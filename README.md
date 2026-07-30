@@ -357,7 +357,9 @@ Multipart upload is also supported with `video_id`, `index_id`, and
 
 Analysis accepts one complete Track A particle. IDs and all canonical times are
 validated before any provider call. Times are non-negative absolute integer
-milliseconds on the source-video timeline:
+milliseconds on the source-video timeline. The matching TwelveLabs asset must
+be `ready`; analysis returns `409` with `retryable: true` while it is still
+processing and `retryable: false` after a terminal upload failure:
 
 ```json
 {

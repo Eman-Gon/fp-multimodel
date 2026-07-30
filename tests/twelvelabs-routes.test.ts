@@ -83,6 +83,52 @@ test("index upload preserves local and provider identities", async (t) => {
   });
 });
 
+test("upload status polling normalizes processing, ready, and failed states", async (t) => {
+  const restoreEnvironment = setApiKey("server-secret");
+  t.after(restoreEnvironment);
+  const cases = [
+    ["processing", 202, "processing"],
+    ["ready", 200, "ready"],
+    ["failed", 200, "failed"],
+  ] as const;
+
+  for (const [providerStatus, expectedHttpStatus, expectedStatus] of cases) {
+    const restoreFetch = setFetch(async () =>
+      jsonResponse({
+        _id: "asset-123",
+        status: providerStatus,
+        filename: "source.mp4",
+        file_type: "video/mp4",
+        user_metadata: { video_id: "vid-03" },
+      }),
+    );
+    try {
+      const response = await indexVideo(
+        jsonRequest("/api/integrations/twelvelabs/index", {
+          action: "status",
+          video_id: "vid-03",
+          index_id: "index-789",
+          asset_id: "asset-123",
+        }),
+      );
+      const body = await response.json();
+
+      assert.equal(response.status, expectedHttpStatus);
+      assert.deepEqual(body.data, {
+        provider: "twelvelabs",
+        video_id: "vid-03",
+        index_id: "index-789",
+        asset_id: "asset-123",
+        indexed_asset_id: null,
+        stage: "upload",
+        status: expectedStatus,
+      });
+    } finally {
+      restoreFetch();
+    }
+  }
+});
+
 test("index action waits for a ready asset and starts separate indexing", async (t) => {
   const restoreEnvironment = setApiKey("server-secret");
   const calls: string[] = [];
@@ -458,6 +504,52 @@ test("no-gesture analysis stays an explicit unconfirmed suggestion", async (t) =
   assert.equal(body.data.annotation.gesture_region.value, null);
   assert.equal(body.data.annotation.gesture_boundaries.value, null);
   assert.equal(body.data.annotation.gesture_boundaries.confirmed, false);
+});
+
+test("analysis reports whether a non-ready asset can be retried", async (t) => {
+  const restoreEnvironment = setApiKey("server-secret");
+  t.after(restoreEnvironment);
+  const cases = [
+    ["processing", true],
+    ["failed", false],
+  ] as const;
+
+  for (const [providerStatus, retryable] of cases) {
+    let providerCalls = 0;
+    const restoreFetch = setFetch(async () => {
+      providerCalls += 1;
+      return jsonResponse({
+        _id: "asset-123",
+        status: providerStatus,
+        filename: "source.mp4",
+        file_type: "video/mp4",
+        user_metadata: { video_id: "vid-03" },
+      });
+    });
+    try {
+      const response = await analyze(
+        jsonRequest("/api/integrations/twelvelabs/analyze", {
+          video_id: "vid-03",
+          instance_id: "vid-03:u1",
+          asset_id: "asset-123",
+          video_duration_ms: 12_000,
+          particle: trackAParticle,
+        }),
+      );
+      const body = await response.json();
+
+      assert.equal(response.status, 409);
+      assert.equal(body.error.code, "TWELVELABS_INVALID_REQUEST");
+      assert.deepEqual(body.error.details, {
+        retryable,
+        video_id: "vid-03",
+        instance_id: "vid-03:u1",
+      });
+      assert.equal(providerCalls, 1);
+    } finally {
+      restoreFetch();
+    }
+  }
 });
 
 test("invalid cross-video input is rejected before TwelveLabs is called", async (t) => {
