@@ -11,6 +11,76 @@ import {
   assertTimeRange,
 } from "./validation.ts";
 
+export function validateTrackAParticle(
+  particle: TrackAParticle,
+  videoId: string,
+  videoDurationMs: number,
+  label = "particle",
+): void {
+  assertNonEmptyId(videoId, "videoId");
+  assertMilliseconds(videoDurationMs, "videoDurationMs");
+  assertNonEmptyId(particle.utterance_id, `${label}.utterance_id`);
+  assertNonEmptyId(particle.instance_id, `${label}.instance_id`);
+  assertNonEmptyId(particle.surface_form, `${label}.surface_form`);
+
+  const expectedInstanceId = `${videoId}:${particle.utterance_id}`;
+  if (particle.instance_id !== expectedInstanceId) {
+    throw new RangeError(
+      `${label}.instance_id must equal ${expectedInstanceId}`,
+    );
+  }
+
+  const vocabularyEntry = TARGET_PARTICLES.find(
+    (entry) => entry.token === particle.fp_token,
+  );
+  if (vocabularyEntry === undefined) {
+    throw new TypeError(
+      `${label}.fp_token is not in the controlled vocabulary`,
+    );
+  }
+  if (particle.fp_pinyin !== vocabularyEntry.pinyin) {
+    throw new TypeError(`${label}.fp_pinyin does not match fp_token`);
+  }
+  if (
+    !(vocabularyEntry.surface_forms as readonly string[]).includes(
+      particle.surface_form,
+    )
+  ) {
+    throw new TypeError(`${label}.surface_form does not match fp_token`);
+  }
+  if (particle.source !== "mfa_rule") {
+    throw new TypeError(`${label}.source must equal mfa_rule`);
+  }
+  if (particle.confirmed !== false) {
+    throw new TypeError(
+      `${label} must remain unconfirmed until human review`,
+    );
+  }
+  if (
+    particle.confidence !== null &&
+    (!Number.isFinite(particle.confidence) ||
+      particle.confidence < 0 ||
+      particle.confidence > 1)
+  ) {
+    throw new RangeError(
+      `${label}.confidence must be null or between 0 and 1`,
+    );
+  }
+
+  assertTimeRange(
+    {
+      start_ms: particle.fp_start_ms,
+      end_ms: particle.fp_end_ms,
+    },
+    label,
+  );
+  if (particle.fp_end_ms > videoDurationMs) {
+    throw new RangeError(
+      `${label}.fp_end_ms must not exceed videoDurationMs`,
+    );
+  }
+}
+
 /**
  * Adapts the current Python Track A JSON artifact to B1–B3. Track A detects at
  * most one final particle per unique utterance and already emits the stable
@@ -29,8 +99,6 @@ export function createTrackBHandoff(
 
   for (const [index, particle] of detection.particles.entries()) {
     assertNonEmptyId(particle.utterance_id, `particles[${index}].utterance_id`);
-    assertNonEmptyId(particle.instance_id, `particles[${index}].instance_id`);
-    assertNonEmptyId(particle.surface_form, `particles[${index}].surface_form`);
 
     if (seenUtteranceIds.has(particle.utterance_id)) {
       throw new RangeError(
@@ -39,66 +107,12 @@ export function createTrackBHandoff(
     }
     seenUtteranceIds.add(particle.utterance_id);
 
-    const expectedInstanceId = `${detection.video_id}:${particle.utterance_id}`;
-    if (particle.instance_id !== expectedInstanceId) {
-      throw new RangeError(
-        `particles[${index}].instance_id must equal ${expectedInstanceId}`,
-      );
-    }
-
-    const vocabularyEntry = TARGET_PARTICLES.find(
-      (entry) => entry.token === particle.fp_token,
-    );
-    if (vocabularyEntry === undefined) {
-      throw new TypeError(
-        `particles[${index}].fp_token is not in the controlled vocabulary`,
-      );
-    }
-    if (particle.fp_pinyin !== vocabularyEntry.pinyin) {
-      throw new TypeError(
-        `particles[${index}].fp_pinyin does not match fp_token`,
-      );
-    }
-    if (
-      !(vocabularyEntry.surface_forms as readonly string[]).includes(
-        particle.surface_form,
-      )
-    ) {
-      throw new TypeError(
-        `particles[${index}].surface_form does not match fp_token`,
-      );
-    }
-    if (particle.source !== "mfa_rule") {
-      throw new TypeError(`particles[${index}].source must equal mfa_rule`);
-    }
-    if (particle.confirmed !== false) {
-      throw new TypeError(
-        `particles[${index}] must remain unconfirmed until human review`,
-      );
-    }
-    if (
-      particle.confidence !== null &&
-      (!Number.isFinite(particle.confidence) ||
-        particle.confidence < 0 ||
-        particle.confidence > 1)
-    ) {
-      throw new RangeError(
-        `particles[${index}].confidence must be null or between 0 and 1`,
-      );
-    }
-
-    assertTimeRange(
-      {
-        start_ms: particle.fp_start_ms,
-        end_ms: particle.fp_end_ms,
-      },
+    validateTrackAParticle(
+      particle,
+      detection.video_id,
+      videoDurationMs,
       `particles[${index}]`,
     );
-    if (particle.fp_end_ms > videoDurationMs) {
-      throw new RangeError(
-        `particles[${index}].fp_end_ms must not exceed videoDurationMs`,
-      );
-    }
 
     const instanceId = particle.instance_id;
     if (particlesByInstanceId[instanceId] !== undefined) {

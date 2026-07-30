@@ -12,6 +12,7 @@ import {
   PEGASUS_GESTURE_RESPONSE_SCHEMA,
 } from "./pegasus.ts";
 import { reconcileGestureDraft } from "./reconcile-gesture.ts";
+import { validateTrackAParticle } from "./track-a-handoff.ts";
 import { assertMilliseconds, assertNonEmptyId } from "./validation.ts";
 
 /**
@@ -26,11 +27,22 @@ export async function draftTrackBAnnotations(
   assertMilliseconds(request.video_duration_ms, "request.video_duration_ms");
 
   const seenInstanceIds = new Set<string>();
-  const workItems = request.particle_instances.map((particle) => {
+  const seenUtteranceIds = new Set<string>();
+  const workItems = request.particle_instances.map((particle, index) => {
     if (seenInstanceIds.has(particle.instance_id)) {
       throw new RangeError(`duplicate particle instance_id: ${particle.instance_id}`);
     }
     seenInstanceIds.add(particle.instance_id);
+    if (seenUtteranceIds.has(particle.utterance_id)) {
+      throw new RangeError(`duplicate particle utterance_id: ${particle.utterance_id}`);
+    }
+    seenUtteranceIds.add(particle.utterance_id);
+    validateTrackAParticle(
+      particle,
+      request.video_id,
+      request.video_duration_ms,
+      `request.particle_instances[${index}]`,
+    );
 
     return {
       particle,
@@ -66,6 +78,7 @@ export async function draftTrackBAnnotations(
 
     drafts.push(
       reconcileGestureDraft(
+        request.video_id,
         particle.instance_id,
         window,
         semanticGesture,
@@ -100,9 +113,22 @@ export async function draftTrackBBatchAnnotations(
   }
 
   return Promise.all(
-    request.videos.map(async (video) => ({
-      video_id: video.video_id,
-      annotations: await draftTrackBAnnotations(video, dependencies),
-    })),
+    request.videos.map(async (video): Promise<TrackBVideoDraft> => {
+      try {
+        return {
+          video_id: video.video_id,
+          status: "completed",
+          annotations: await draftTrackBAnnotations(video, dependencies),
+        };
+      } catch (error) {
+        return {
+          video_id: video.video_id,
+          status: "failed",
+          annotations: [],
+          error_message:
+            error instanceof Error ? error.message : "Unknown Track B failure",
+        };
+      }
+    }),
   );
 }

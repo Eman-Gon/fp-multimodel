@@ -6,8 +6,11 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from fp_multimodel.vocab import PARTICLE_NORMALIZATION, TARGET_PARTICLES
-
+from fp_multimodel.vocab import (
+    EXTENDED_PARTICLE_CANDIDATES,
+    PARTICLE_NORMALIZATION,
+    TARGET_PARTICLES,
+)
 
 Milliseconds = Annotated[int, Field(ge=0)]
 Confidence = Annotated[float, Field(ge=0.0, le=1.0)]
@@ -187,6 +190,15 @@ class UtteranceAlignment(StrictModel):
     utterance_id: str = Field(min_length=1)
     intervals: list[AlignedInterval]
 
+    @model_validator(mode="after")
+    def validate_interval_order(self) -> UtteranceAlignment:
+        for previous, current in zip(self.intervals, self.intervals[1:], strict=False):
+            if current.start_ms < previous.end_ms:
+                raise ValueError(
+                    "alignment intervals must be ordered and non-overlapping"
+                )
+        return self
+
 
 class ParticleInstance(StrictModel):
     """One utterance-final target particle with canonical millisecond timing."""
@@ -216,15 +228,58 @@ class ParticleInstance(StrictModel):
         return self
 
 
+class ExtendedParticleCandidate(StrictModel):
+    """One review-only match from the researcher-supplied candidate inventory."""
+
+    instance_id: str = Field(min_length=1)
+    normalized_candidate: str = Field(min_length=1)
+    surface_form: str = Field(min_length=1)
+    start_ms: Milliseconds
+    end_ms: Milliseconds
+    utterance_id: str = Field(min_length=1)
+    source: Literal["mfa_rule"] = "mfa_rule"
+    confirmed: Literal[False] = False
+    review_required: Literal[True] = True
+
+    @model_validator(mode="after")
+    def validate_candidate(self) -> ExtendedParticleCandidate:
+        if self.end_ms <= self.start_ms:
+            raise ValueError("end_ms must be greater than start_ms")
+        if self.normalized_candidate not in EXTENDED_PARTICLE_CANDIDATES:
+            raise ValueError(
+                "normalized_candidate must be in EXTENDED_PARTICLE_CANDIDATES"
+            )
+        if self.surface_form.replace("嗎", "吗") != self.normalized_candidate:
+            raise ValueError(
+                "surface_form must normalize exactly to normalized_candidate"
+            )
+        return self
+
+
 class ParticleDetectionResult(StrictModel):
     """Serializable result of scanning one video's reviewed alignments."""
 
     video_id: str = Field(min_length=1)
     particles: list[ParticleInstance]
+    candidates: list[ExtendedParticleCandidate] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_unique_instance_ids(self) -> "ParticleDetectionResult":
-        instance_ids = [particle.instance_id for particle in self.particles]
+    def validate_instance_identity(self) -> ParticleDetectionResult:
+        detections: list[ParticleInstance | ExtendedParticleCandidate] = [
+            *self.particles,
+            *self.candidates,
+        ]
+        instance_ids = [detection.instance_id for detection in detections]
         if len(instance_ids) != len(set(instance_ids)):
             raise ValueError("particle instance_ids must be unique")
+        utterance_ids = [detection.utterance_id for detection in detections]
+        if len(utterance_ids) != len(set(utterance_ids)):
+            raise ValueError("only one particle result is allowed per utterance")
+        for detection in detections:
+            expected_instance_id = f"{self.video_id}:{detection.utterance_id}"
+            if detection.instance_id != expected_instance_id:
+                raise ValueError(
+                    "particle instance_id must equal "
+                    f"{expected_instance_id!r} for this video and utterance"
+                )
         return self

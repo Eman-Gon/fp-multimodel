@@ -27,7 +27,7 @@ test("drafts each particle in a multi-particle video under its own instance_id",
       particle_instances: [
         {
           ...trackAProvenance,
-          instance_id: "fp-ne",
+          instance_id: "vid-03:u1",
           fp_token: "呢",
           fp_pinyin: "ne",
           surface_form: "呢",
@@ -37,7 +37,7 @@ test("drafts each particle in a multi-particle video under its own instance_id",
         },
         {
           ...trackAProvenance,
-          instance_id: "fp-ma",
+          instance_id: "vid-03:u2",
           fp_token: "吗",
           fp_pinyin: "ma",
           surface_form: "嗎",
@@ -51,7 +51,7 @@ test("drafts each particle in a multi-particle video under its own instance_id",
       semanticAnalyzer: {
         async analyzeGesture(request) {
           semanticCalls.push(request);
-          return request.instance_id === "fp-ne"
+          return request.instance_id === "vid-03:u1"
             ? {
                 gesture_type: "head_tilt",
                 gesture_region: "face",
@@ -79,7 +79,11 @@ test("drafts each particle in a multi-particle video under its own instance_id",
 
   assert.deepEqual(
     drafts.map((draft) => draft.instance_id),
-    ["fp-ne", "fp-ma"],
+    ["vid-03:u1", "vid-03:u2"],
+  );
+  assert.deepEqual(
+    drafts.map((draft) => draft.video_id),
+    ["vid-03", "vid-03"],
   );
   assert.equal(semanticCalls.length, 2);
   assert.equal(motionCalls.length, 1);
@@ -87,6 +91,17 @@ test("drafts each particle in a multi-particle video under its own instance_id",
   assert.equal(motionCalls[0]!.semantic_gesture.gesture_type, "head_tilt");
   assert.equal(drafts[0]!.gesture_boundaries.source, "mediapipe");
   assert.equal(drafts[1]!.gesture_boundaries.value, null);
+  assert.deepEqual(drafts[0]!.model_evidence, {
+    pegasus: {
+      gesture_type: "head_tilt",
+      gesture_region: "face",
+      segment: { start_ms: 3_800, end_ms: 4_300 },
+      confidence: 0.79,
+    },
+    mediapipe_intervals: [
+      { start_ms: 3_900, end_ms: 4_250, confidence: 0.72 },
+    ],
+  });
 });
 
 test("rejects duplicate instance IDs before ambiguous graph links are emitted", async () => {
@@ -100,7 +115,7 @@ test("rejects duplicate instance IDs before ambiguous graph links are emitted", 
         particle_instances: [
           {
             ...trackAProvenance,
-            instance_id: "fp-1",
+            instance_id: "vid-03:u1",
             fp_token: "呢",
             fp_pinyin: "ne",
             surface_form: "呢",
@@ -110,13 +125,13 @@ test("rejects duplicate instance IDs before ambiguous graph links are emitted", 
           },
           {
             ...trackAProvenance,
-            instance_id: "fp-1",
-            fp_token: "吗",
-            fp_pinyin: "ma",
-            surface_form: "吗",
-            fp_start_ms: 6_000,
-            fp_end_ms: 6_200,
-            utterance_id: "u2",
+            instance_id: "vid-03:u1",
+            fp_token: "呢",
+            fp_pinyin: "ne",
+            surface_form: "呢",
+            fp_start_ms: 4_000,
+            fp_end_ms: 4_200,
+            utterance_id: "u1",
           },
         ],
       },
@@ -156,7 +171,7 @@ test("batch analysis preserves each video's identity and source timeline", async
           particle_instances: [
             {
               ...trackAProvenance,
-              instance_id: "vid1:fp-1",
+              instance_id: "vid1:u1",
               fp_token: "吗",
               fp_pinyin: "ma",
               surface_form: "吗",
@@ -172,7 +187,7 @@ test("batch analysis preserves each video's identity and source timeline", async
           particle_instances: [
             {
               ...trackAProvenance,
-              instance_id: "vid2:fp-1",
+              instance_id: "vid2:u1",
               fp_token: "吧",
               fp_pinyin: "ba",
               surface_form: "吧",
@@ -208,8 +223,14 @@ test("batch analysis preserves each video's identity and source timeline", async
     result.map(({ video_id }) => video_id),
     ["vid1", "vid2"],
   );
+  assert.deepEqual(
+    result.map(({ status }) => status),
+    ["completed", "completed"],
+  );
   assert.equal(result[0]?.annotations[0]?.analysis_window.start_ms, 0);
   assert.equal(result[1]?.annotations[0]?.analysis_window.start_ms, 13_000);
+  assert.equal(result[0]?.annotations[0]?.video_id, "vid1");
+  assert.equal(result[1]?.annotations[0]?.video_id, "vid2");
 });
 
 test("batch analysis rejects duplicate video ids", async () => {
@@ -245,4 +266,161 @@ test("batch analysis rejects duplicate video ids", async () => {
     ),
     /duplicate video_id/,
   );
+});
+
+test("batch analysis isolates provider failures for per-video retry", async () => {
+  const result = await draftTrackBBatchAnnotations(
+    {
+      project_id: "project-1",
+      videos: [
+        {
+          video_id: "vid1",
+          video_duration_ms: 10_000,
+          particle_instances: [
+            {
+              ...trackAProvenance,
+              instance_id: "vid1:u1",
+              fp_token: "吗",
+              fp_pinyin: "ma",
+              surface_form: "吗",
+              fp_start_ms: 1_000,
+              fp_end_ms: 1_200,
+              utterance_id: "u1",
+            },
+          ],
+        },
+        {
+          video_id: "vid2",
+          video_duration_ms: 10_000,
+          particle_instances: [
+            {
+              ...trackAProvenance,
+              instance_id: "vid2:u1",
+              fp_token: "吧",
+              fp_pinyin: "ba",
+              surface_form: "吧",
+              fp_start_ms: 2_000,
+              fp_end_ms: 2_200,
+              utterance_id: "u1",
+            },
+          ],
+        },
+      ],
+    },
+    {
+      semanticAnalyzer: {
+        async analyzeGesture(request) {
+          if (request.video_id === "vid1") {
+            throw new Error("Pegasus temporarily unavailable");
+          }
+          return {
+            gesture_type: "none",
+            gesture_region: null,
+            start_ms: null,
+            end_ms: null,
+            confidence: 0.75,
+          };
+        },
+      },
+      motionAnalyzer: {
+        async detectMotion() {
+          return [];
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(result, [
+    {
+      video_id: "vid1",
+      status: "failed",
+      annotations: [],
+      error_message: "Pegasus temporarily unavailable",
+    },
+    {
+      video_id: "vid2",
+      status: "completed",
+      annotations: [
+        {
+          video_id: "vid2",
+          instance_id: "vid2:u1",
+          analysis_window: { start_ms: 0, end_ms: 4_200 },
+          gesture_present: {
+            value: false,
+            confidence: 0.75,
+            source: "pegasus",
+            confirmed: false,
+          },
+          gesture_type: {
+            value: "none",
+            confidence: 0.75,
+            source: "pegasus",
+            confirmed: false,
+          },
+          gesture_region: {
+            value: null,
+            confidence: 0.75,
+            source: "pegasus",
+            confirmed: false,
+          },
+          gesture_boundaries: {
+            value: null,
+            confidence: 0.75,
+            source: "pegasus",
+            confirmed: false,
+          },
+          model_evidence: {
+            pegasus: {
+              gesture_type: "none",
+              gesture_region: null,
+              segment: null,
+              confidence: 0.75,
+            },
+            mediapipe_intervals: [],
+          },
+        },
+      ],
+    },
+  ]);
+});
+
+test("direct analysis rejects a cross-video particle before provider calls", async () => {
+  let providerCallCount = 0;
+
+  await assert.rejects(
+    draftTrackBAnnotations(
+      {
+        video_id: "vid1",
+        video_duration_ms: 10_000,
+        particle_instances: [
+          {
+            ...trackAProvenance,
+            instance_id: "vid2:u1",
+            fp_token: "吗",
+            fp_pinyin: "ma",
+            surface_form: "吗",
+            fp_start_ms: 1_000,
+            fp_end_ms: 1_200,
+            utterance_id: "u1",
+          },
+        ],
+      },
+      {
+        semanticAnalyzer: {
+          async analyzeGesture() {
+            providerCallCount += 1;
+            return {};
+          },
+        },
+        motionAnalyzer: {
+          async detectMotion() {
+            providerCallCount += 1;
+            return [];
+          },
+        },
+      },
+    ),
+    /instance_id must equal vid1:u1/,
+  );
+  assert.equal(providerCallCount, 0);
 });

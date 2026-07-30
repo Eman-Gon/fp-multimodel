@@ -192,11 +192,19 @@ The provider-independent B1–B3 core lives in `lib/track-b`. It currently:
   controlled gesture taxonomy
 - turns MediaPipe landmark-velocity samples into motion intervals
 - keeps Pegasus gesture type/region while refining timing from the nearest
-  coherent MediaPipe interval
+  coherent MediaPipe interval whose boundaries fall within the Pegasus segment
 - emits gesture presence and gesture boundaries as separate, unconfirmed draft
   fields with explicit confidence and provenance
+- retains `video_id` plus original Pegasus and MediaPipe evidence on every
+  reconciled draft
 - handles every FP instance independently for multi-particle videos
 - analyzes multiple videos concurrently without mixing source timelines
+- returns completed or failed status per video so failed provider calls can be
+  retried without discarding completed results
+
+The concrete TwelveLabs client and batched Python MediaPipe worker are the next
+integration step. The core uses small provider interfaces so API credentials
+and heavyweight CV dependencies are not required by its test suite.
 
 ## Track C foundation
 
@@ -210,10 +218,6 @@ The review interface now includes:
 - a visible particle + tone + sentence type + gesture meaning equation
 - a clip information panel with canonical times and derived frame numbers
 - a Clip Explorer grouped by particle and communicative function
-
-The concrete TwelveLabs client and batched Python MediaPipe worker are the next
-integration step. The core uses small provider interfaces so API credentials
-and heavyweight CV dependencies are not required by its test suite.
 
 ```bash
 npm install

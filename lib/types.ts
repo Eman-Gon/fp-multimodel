@@ -64,17 +64,24 @@ export interface MotionInterval extends TimeRange {
   readonly confidence?: number | null;
 }
 
+export interface GestureModelEvidence {
+  readonly pegasus: PegasusGesture;
+  readonly mediapipe_intervals: readonly MotionInterval[];
+}
+
 /**
  * Presence and boundaries are separate fields so reviewers can confirm the
  * cognitive tasks independently (Track B3).
  */
 export interface GestureAnnotationDraft {
+  readonly video_id: string;
   readonly instance_id: string;
   readonly analysis_window: TimeRange;
   readonly gesture_present: AiDraftField<boolean>;
   readonly gesture_type: AiDraftField<GestureType>;
   readonly gesture_region: AiDraftField<GestureRegion | null>;
   readonly gesture_boundaries: AiDraftField<TimeRange | null>;
+  readonly model_evidence: GestureModelEvidence;
 }
 
 export interface TrackBRequest {
@@ -88,10 +95,22 @@ export interface TrackBBatchRequest {
   readonly videos: readonly TrackBRequest[];
 }
 
-export interface TrackBVideoDraft {
+export interface CompletedTrackBVideoDraft {
   readonly video_id: string;
+  readonly status: "completed";
   readonly annotations: readonly GestureAnnotationDraft[];
 }
+
+export interface FailedTrackBVideoDraft {
+  readonly video_id: string;
+  readonly status: "failed";
+  readonly annotations: readonly [];
+  readonly error_message: string;
+}
+
+export type TrackBVideoDraft =
+  | CompletedTrackBVideoDraft
+  | FailedTrackBVideoDraft;
 
 /**
  * Keeps Track A metadata available to graph/coding consumers while exposing

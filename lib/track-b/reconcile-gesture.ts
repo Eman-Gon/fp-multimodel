@@ -18,11 +18,13 @@ import {
 } from "./validation.ts";
 
 export function reconcileGestureDraft(
+  videoId: string,
   instanceId: string,
   analysisWindow: TimeRange,
   semanticGesture: PegasusGesture,
   motionIntervals: readonly MotionInterval[],
 ): GestureAnnotationDraft {
+  assertNonEmptyId(videoId, "videoId");
   assertNonEmptyId(instanceId, "instanceId");
   assertTimeRange(analysisWindow, "analysisWindow");
   assertConfidence(semanticGesture.confidence, "semanticGesture.confidence");
@@ -61,6 +63,7 @@ export function reconcileGestureDraft(
     semanticGesture.confidence,
     "pegasus",
   );
+  const modelEvidence = cloneModelEvidence(semanticGesture, motionIntervals);
 
   if (!gesturePresent) {
     if (
@@ -74,12 +77,14 @@ export function reconcileGestureDraft(
     }
 
     return {
+      video_id: videoId,
       instance_id: instanceId,
       analysis_window: analysisWindow,
       gesture_present: presence,
       gesture_type: gestureType,
       gesture_region: gestureRegion,
       gesture_boundaries: draftField(null, semanticGesture.confidence, "pegasus"),
+      model_evidence: modelEvidence,
     };
   }
 
@@ -102,6 +107,7 @@ export function reconcileGestureDraft(
       : (nearestMotion.confidence ?? null);
 
   return {
+    video_id: videoId,
     instance_id: instanceId,
     analysis_window: analysisWindow,
     gesture_present: presence,
@@ -112,44 +118,41 @@ export function reconcileGestureDraft(
       boundaryConfidence,
       boundarySource,
     ),
+    model_evidence: modelEvidence,
   };
 }
 
 /**
  * Selects one coherent motion interval rather than mixing an onset from one
- * motion event with an offset from another. Only overlapping intervals are
- * eligible; nearest boundary pair wins, with stable tie-breaking.
+ * motion event with an offset from another. Both MediaPipe boundaries must be
+ * within the Pegasus segment; nearest boundary pair wins with stable ties.
  */
 export function selectNearestMotionInterval(
   semanticSegment: TimeRange,
   motionIntervals: readonly MotionInterval[],
 ): MotionInterval | null {
   const candidates = motionIntervals
-    .filter((interval) => overlapMs(semanticSegment, interval) > 0)
+    .filter(
+      (interval) =>
+        interval.start_ms >= semanticSegment.start_ms &&
+        interval.end_ms <= semanticSegment.end_ms,
+    )
     .map((interval) => ({
       interval,
       boundaryDistance:
         Math.abs(interval.start_ms - semanticSegment.start_ms) +
         Math.abs(interval.end_ms - semanticSegment.end_ms),
-      overlap: overlapMs(semanticSegment, interval),
+      duration: interval.end_ms - interval.start_ms,
     }))
     .sort(
       (left, right) =>
         left.boundaryDistance - right.boundaryDistance ||
-        right.overlap - left.overlap ||
+        right.duration - left.duration ||
         left.interval.start_ms - right.interval.start_ms ||
         left.interval.end_ms - right.interval.end_ms,
     );
 
   return candidates[0]?.interval ?? null;
-}
-
-function overlapMs(left: TimeRange, right: TimeRange): number {
-  return Math.max(
-    0,
-    Math.min(left.end_ms, right.end_ms) -
-      Math.max(left.start_ms, right.start_ms),
-  );
 }
 
 function assertContained(
@@ -160,6 +163,22 @@ function assertContained(
   if (inner.start_ms < outer.start_ms || inner.end_ms > outer.end_ms) {
     throw new RangeError(`${label} must fall within the analysis window`);
   }
+}
+
+function cloneModelEvidence(
+  semanticGesture: PegasusGesture,
+  motionIntervals: readonly MotionInterval[],
+): GestureAnnotationDraft["model_evidence"] {
+  return {
+    pegasus: {
+      ...semanticGesture,
+      segment:
+        semanticGesture.segment === null
+          ? null
+          : { ...semanticGesture.segment },
+    },
+    mediapipe_intervals: motionIntervals.map((interval) => ({ ...interval })),
+  };
 }
 
 function draftField<T>(
