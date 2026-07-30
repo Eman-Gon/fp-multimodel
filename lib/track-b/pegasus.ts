@@ -31,9 +31,9 @@ export const PEGASUS_GESTURE_RESPONSE_SCHEMA: Readonly<Record<string, unknown>> 
       type: ["string", "null"],
       enum: [...GESTURE_REGIONS, null],
     },
-    start_ms: { type: ["integer", "null"], minimum: 0 },
-    end_ms: { type: ["integer", "null"], minimum: 0 },
-    confidence: { type: "number", minimum: 0, maximum: 1 },
+    start_ms: { type: ["integer", "null"] },
+    end_ms: { type: ["integer", "null"] },
+    confidence: { type: "number" },
   },
 };
 

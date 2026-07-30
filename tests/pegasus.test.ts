@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  PEGASUS_GESTURE_RESPONSE_SCHEMA,
   buildPegasusGesturePrompt,
   parsePegasusGesture,
 } from "../lib/track-b/pegasus.ts";
@@ -19,6 +20,13 @@ test("the Pegasus prompt requires absolute milliseconds and a controlled taxonom
   assert.match(prompt, /absolute source-video timestamps 2000ms and 6000ms/);
   assert.match(prompt, /head_nod/);
   assert.match(prompt, /gesture_type "none"/);
+});
+
+test("the Pegasus response schema uses only provider-supported numeric fields", () => {
+  const serialized = JSON.stringify(PEGASUS_GESTURE_RESPONSE_SCHEMA);
+
+  assert.equal(serialized.includes('"minimum"'), false);
+  assert.equal(serialized.includes('"maximum"'), false);
 });
 
 test("parses a schema-compliant detected gesture", () => {
