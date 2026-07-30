@@ -11,18 +11,13 @@ import {
   sourceMillisecondsToFrame,
 } from "./time.ts";
 
-const WAVEFORM_HEIGHTS = Array.from({ length: 92 }, (_, index) => {
-  const primary = Math.abs(Math.sin(index * 0.83)) * 18;
-  const secondary = Math.abs(Math.cos(index * 0.37)) * 8;
-  return Math.round(5 + primary + secondary);
-});
-
 interface TimelineEditorProps {
   readonly clipStartMs: number;
   readonly clipEndMs: number;
   readonly currentSourceMs: number;
   readonly fps: number;
   readonly particleTiming: ReviewField<TimeRange>;
+  readonly gesturePresent: ReviewField<boolean>;
   readonly gestureTiming: ReviewField<TimeRange | null>;
   readonly disabled: boolean;
   readonly onSeek: (sourceMilliseconds: number) => void;
@@ -39,6 +34,7 @@ export function TimelineEditor({
   currentSourceMs,
   fps,
   particleTiming,
+  gesturePresent,
   gestureTiming,
   disabled,
   onSeek,
@@ -46,6 +42,10 @@ export function TimelineEditor({
   onActivate,
 }: TimelineEditorProps) {
   const durationMs = clipEndMs - clipStartMs;
+  const gestureIsPresent =
+    (gesturePresent.state === "skipped"
+      ? null
+      : (gesturePresent.value ?? gesturePresent.suggestion.value)) === true;
   const playheadPercent =
     ((currentSourceMs - clipStartMs) / durationMs) * 100;
   const ticks = useMemo(() => {
@@ -131,10 +131,8 @@ export function TimelineEditor({
             </span>
           ))}
         </button>
-        <div className="timeline__waveform" aria-hidden="true">
-          {WAVEFORM_HEIGHTS.map((height, index) => (
-            <i key={index} style={{ height }} />
-          ))}
+        <div className="timeline__signal-placeholder">
+          <span>Audio waveform unavailable in this demo</span>
         </div>
         <RangeTrack
           label="Particle"
@@ -157,6 +155,8 @@ export function TimelineEditor({
           clipEndMs={clipEndMs}
           fps={fps}
           disabled={disabled}
+          canCreate={gestureIsPresent}
+          emptySourceMs={currentSourceMs}
           onCommit={onCommit}
           onActivate={onActivate}
         />
@@ -174,6 +174,8 @@ interface RangeTrackProps {
   readonly clipEndMs: number;
   readonly fps: number;
   readonly disabled: boolean;
+  readonly canCreate?: boolean;
+  readonly emptySourceMs?: number;
   readonly onCommit: (
     field: "fp_timing" | "gesture_timing",
     value: TimeRange,
@@ -190,22 +192,54 @@ function RangeTrack({
   clipEndMs,
   fps,
   disabled,
+  canCreate = false,
+  emptySourceMs,
   onCommit,
   onActivate,
 }: RangeTrackProps) {
-  const sourceRange = field.value ?? field.suggestion.value;
+  const sourceRange =
+    field.state === "skipped"
+      ? null
+      : (field.value ?? field.suggestion.value);
   if (sourceRange === null) {
+    const canSetBoundary =
+      canCreate && emptySourceMs !== undefined && !disabled;
     return (
       <fieldset
         className={`range-track ${className}`}
         onFocusCapture={() => onActivate(fieldName)}
-        disabled
+        disabled={!canSetBoundary}
       >
         <legend>
           <span>{label}</span>
-          <em>No boundary suggested</em>
+          <em>
+            {field.state === "skipped"
+              ? "Boundary skipped"
+              : "No boundary suggested"}
+          </em>
         </legend>
-        <div className="range-track__rail" />
+        <div className="range-track__rail">
+          {canSetBoundary ? (
+            <button
+              type="button"
+              onClick={() => {
+                const frameMs = Math.max(1, Math.round(1_000 / fps));
+                const startMs = clamp(
+                  emptySourceMs,
+                  clipStartMs,
+                  clipEndMs - frameMs,
+                );
+                onActivate(fieldName);
+                onCommit(fieldName, {
+                  start_ms: startMs,
+                  end_ms: startMs + frameMs,
+                });
+              }}
+            >
+              Set boundary at playhead
+            </button>
+          ) : null}
+        </div>
       </fieldset>
     );
   }
@@ -330,17 +364,21 @@ function EditableRangeTrack({
       : field.state === "confirmed"
         ? "Confirmed"
         : "Skipped";
+  const skipped = field.state === "skipped";
 
   return (
     <fieldset
       className={`range-track ${className}`}
       onFocusCapture={() => onActivate(fieldName)}
-      disabled={disabled}
+      disabled={disabled || skipped}
     >
       <legend>
         <span>{label}</span>
         <em>{statusText}</em>
       </legend>
+      {skipped ? (
+        <div className="range-track__empty">Not applicable</div>
+      ) : (
       <div className="range-track__rail">
         <div
           className="range-track__selection"
@@ -389,6 +427,7 @@ function EditableRangeTrack({
           onBlur={commit}
         />
       </div>
+      )}
     </fieldset>
   );
 }

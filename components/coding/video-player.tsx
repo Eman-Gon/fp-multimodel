@@ -17,6 +17,7 @@ interface VideoPlayerProps {
   readonly clipStartMs: number;
   readonly clipEndMs: number;
   readonly controller: ClipPlayerController;
+  readonly illustrative: boolean;
 }
 
 export function VideoPlayer({
@@ -25,6 +26,7 @@ export function VideoPlayer({
   clipStartMs,
   clipEndMs,
   controller,
+  illustrative,
 }: VideoPlayerProps) {
   const durationMs = clipEndMs - clipStartMs;
   const relativeMs = controller.currentSourceMs - clipStartMs;
@@ -32,6 +34,11 @@ export function VideoPlayer({
   return (
     <section className="video-player" aria-label="Clip video">
       <div className="video-player__stage">
+        {illustrative ? (
+          <span className="video-player__fixture-label">
+            Illustrative demo media
+          </span>
+        ) : null}
         <video
           ref={controller.videoRef}
           src={sourceUrl}

@@ -1,5 +1,7 @@
 import type {
   GestureAnnotationDraft,
+  SemanticGestureAnalysisResult,
+  SemanticGestureProviderEvidence,
   TrackBBatchRequest,
   TrackBDependencies,
   TrackBRequest,
@@ -58,7 +60,7 @@ export async function draftTrackBAnnotations(
 
   const drafts: GestureAnnotationDraft[] = [];
   for (const { particle, window } of workItems) {
-    const rawSemanticGesture =
+    const rawSemanticAnalysis =
       await dependencies.semanticAnalyzer.analyzeGesture({
         video_id: request.video_id,
         instance_id: particle.instance_id,
@@ -67,7 +69,9 @@ export async function draftTrackBAnnotations(
         prompt: buildPegasusGesturePrompt(window, particle),
         response_schema: PEGASUS_GESTURE_RESPONSE_SCHEMA,
       });
-    const semanticGesture = parsePegasusGesture(rawSemanticGesture, window);
+    const { output, providerEvidence } =
+      unwrapSemanticGestureAnalysis(rawSemanticAnalysis);
+    const semanticGesture = parsePegasusGesture(output, window);
 
     const motionIntervals = await dependencies.motionAnalyzer.detectMotion({
       video_id: request.video_id,
@@ -83,6 +87,7 @@ export async function draftTrackBAnnotations(
         window,
         semanticGesture,
         motionIntervals,
+        providerEvidence,
       ),
     );
   }
@@ -130,5 +135,33 @@ export async function draftTrackBBatchAnnotations(
         };
       }
     }),
+  );
+}
+
+function unwrapSemanticGestureAnalysis(value: unknown): {
+  readonly output: unknown;
+  readonly providerEvidence?: SemanticGestureProviderEvidence;
+} {
+  if (!isSemanticGestureAnalysisResult(value)) {
+    return { output: value };
+  }
+  return {
+    output: value.output,
+    providerEvidence: value.provider_evidence,
+  };
+}
+
+function isSemanticGestureAnalysisResult(
+  value: unknown,
+): value is SemanticGestureAnalysisResult {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const candidate = value as Partial<SemanticGestureAnalysisResult>;
+  return (
+    candidate.kind === "semantic_gesture_analysis" &&
+    "output" in candidate &&
+    typeof candidate.provider_evidence === "object" &&
+    candidate.provider_evidence !== null
   );
 }

@@ -2,6 +2,7 @@ import type {
   AiDraftField,
   GestureAnnotationDraft,
 } from "../types.ts";
+import { createGestureAnalysisWindow } from "../track-b/analysis-window.ts";
 import { reconcileGestureDraft } from "../track-b/reconcile-gesture.ts";
 import {
   assertMilliseconds,
@@ -74,6 +75,33 @@ export function mergeTrackBGestureDrafts(
     if (!particlesById.has(draft.instance_id)) {
       throw new RangeError(
         `Track B draft has no matching clip particle: ${draft.instance_id}`,
+      );
+    }
+    const particle = particlesById.get(draft.instance_id);
+    if (particle === undefined) {
+      throw new RangeError(
+        `Track B draft has no matching clip particle: ${draft.instance_id}`,
+      );
+    }
+    if (particle.fields.fp_timing.state === "skipped") {
+      throw new RangeError(
+        `cannot import Track B draft for skipped FP timing: ${draft.instance_id}`,
+      );
+    }
+    const fpTiming =
+      particle.fields.fp_timing.value ??
+      particle.fields.fp_timing.suggestion.value;
+    const expectedWindow = createGestureAnalysisWindow(
+      {
+        instance_id: particle.instance_id,
+        fp_start_ms: fpTiming.start_ms,
+        fp_end_ms: fpTiming.end_ms,
+      },
+      clip.video.duration_ms,
+    );
+    if (!sameJsonValue(draft.analysis_window, expectedWindow)) {
+      throw new RangeError(
+        `Track B analysis_window is stale for particle ${draft.instance_id}`,
       );
     }
     if (draftsById.has(draft.instance_id)) {
@@ -172,6 +200,9 @@ function assertCanonicalTrackBDraft(
       "Track B draft model_evidence must contain Pegasus output and MediaPipe intervals",
     );
   }
+  if (draft.model_evidence.provider !== undefined) {
+    assertProviderEvidence(draft.model_evidence.provider);
+  }
 
   const canonical = reconcileGestureDraft(
     draft.video_id,
@@ -179,6 +210,7 @@ function assertCanonicalTrackBDraft(
     draft.analysis_window,
     draft.model_evidence.pegasus,
     draft.model_evidence.mediapipe_intervals,
+    draft.model_evidence.provider,
   );
   if (canonical.analysis_window.end_ms > clip.video.duration_ms) {
     throw new RangeError(
@@ -231,4 +263,37 @@ function sameJsonValue(left: unknown, right: unknown): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function assertProviderEvidence(value: unknown): void {
+  if (!isRecord(value)) {
+    throw new TypeError("Track B provider evidence must be an object");
+  }
+  const keys = Object.keys(value).sort();
+  const expectedKeys = [
+    "finish_reason",
+    "model",
+    "provider",
+    "raw_response",
+    "response_id",
+  ];
+  if (!sameJsonValue(keys, expectedKeys)) {
+    throw new TypeError("Track B provider evidence has unexpected fields");
+  }
+  if (value.provider !== "twelvelabs" || value.model !== "pegasus1.5") {
+    throw new TypeError("Track B provider evidence identifies an unsupported model");
+  }
+  if (
+    value.response_id !== null &&
+    (typeof value.response_id !== "string" ||
+      value.response_id.trim().length === 0)
+  ) {
+    throw new TypeError("Track B provider response_id must be null or non-empty");
+  }
+  if (
+    value.finish_reason !== null &&
+    typeof value.finish_reason !== "string"
+  ) {
+    throw new TypeError("Track B provider finish_reason must be null or a string");
+  }
 }

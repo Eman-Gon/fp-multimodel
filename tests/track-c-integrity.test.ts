@@ -341,6 +341,36 @@ test("a present gesture cannot resolve to gesture type none", () => {
   );
 });
 
+test("accept validates a stored model suggestion before confirming it", () => {
+  const clip = createDemoClip();
+  const particle = clip.particle_instances[0]!;
+  particle.fields.gesture_timing = {
+    state: "suggested",
+    value: { start_ms: 1_000, end_ms: 2_000 },
+    suggestion: {
+      value: { start_ms: 1_000, end_ms: 2_000 },
+      source: "mediapipe",
+      confidence: 0.8,
+    },
+    review: null,
+  };
+
+  assert.throws(
+    () =>
+      applyClipCommand(clip, {
+        expected_version: clip.version,
+        command: "review_field",
+        target: {
+          scope: "particle",
+          instance_id: particle.instance_id,
+          field: "gesture_timing",
+        },
+        review: { action: "accept" },
+      }),
+    hasReviewError("INVALID_TIME_RANGE"),
+  );
+});
+
 function hasReviewError(code: string): (error: unknown) => boolean {
   return (error) =>
     error instanceof ReviewCommandError && error.code === code;

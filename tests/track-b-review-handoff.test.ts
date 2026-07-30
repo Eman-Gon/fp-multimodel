@@ -23,13 +23,13 @@ function presentDraft(): GestureAnnotationDraft {
     },
     gesture_type: {
       value: "head_nod",
-      confidence: 0.8,
+      confidence: 0.81,
       source: "pegasus",
       confirmed: false,
     },
     gesture_region: {
       value: "face",
-      confidence: 0.79,
+      confidence: 0.81,
       source: "pegasus",
       confirmed: false,
     },
@@ -237,5 +237,94 @@ test("never overwrites reviewed gesture fields or aliases caller evidence", () =
     merged.particle_instances[0]!.original_track_b_suggestion?.model_evidence
       .mediapipe_intervals[0]?.start_ms,
     13_900,
+  );
+});
+
+test("rejects non-canonical drafts before they can become review suggestions", () => {
+  const clip = importableClip();
+  const contradictory = presentDraft();
+  const invalidConfidence = presentDraft();
+  const outOfClip = presentDraft();
+
+  Object.assign(contradictory.gesture_present, { value: false });
+  Object.assign(invalidConfidence.model_evidence.pegasus, {
+    confidence: 1.5,
+  });
+  Object.assign(outOfClip, {
+    analysis_window: { start_ms: 12_310, end_ms: 16_560 },
+    gesture_boundaries: {
+      value: { start_ms: 12_320, end_ms: 12_330 },
+      confidence: 0.81,
+      source: "pegasus",
+      confirmed: false,
+    },
+    model_evidence: {
+      pegasus: {
+        gesture_type: "head_nod",
+        gesture_region: "face",
+        segment: { start_ms: 12_320, end_ms: 12_330 },
+        confidence: 0.81,
+      },
+      mediapipe_intervals: [],
+    },
+  });
+
+  assert.throws(
+    () => mergeTrackBGestureDrafts(clip, [contradictory]),
+    /must exactly match its canonical model evidence/,
+  );
+  assert.throws(
+    () => mergeTrackBGestureDrafts(clip, [invalidConfidence]),
+    /confidence must be between 0 and 1/,
+  );
+  assert.throws(
+    () => mergeTrackBGestureDrafts(clip, [outOfClip]),
+    /gesture boundaries must fall within the review clip/,
+  );
+});
+
+test("rejects stale Track C schema versions at the import boundary", () => {
+  const stale = {
+    ...importableClip(),
+    schema_version: 2,
+  };
+
+  assert.throws(
+    () => mergeTrackBGestureDrafts(stale as never, [presentDraft()]),
+    /schema_version must equal 3/,
+  );
+});
+
+test("rejects a canonical draft built for stale FP timing", () => {
+  const stale = absentDraft();
+  Object.assign(stale, {
+    analysis_window: { start_ms: 12_000, end_ms: 16_000 },
+  });
+
+  assert.throws(
+    () => mergeTrackBGestureDrafts(importableClip(), [stale]),
+    /analysis_window is stale/,
+  );
+});
+
+test("preserves validated provider-native evidence through review import", () => {
+  const draft = presentDraft();
+  Object.assign(draft.model_evidence, {
+    provider: {
+      provider: "twelvelabs",
+      model: "pegasus1.5",
+      response_id: "response-123",
+      finish_reason: "stop",
+      raw_response: {
+        data: [{ text: JSON.stringify({ gesture_type: "head_nod" }) }],
+      },
+    },
+  });
+
+  const merged = mergeTrackBGestureDrafts(importableClip(), [draft]);
+  assert.deepEqual(
+    merged.particle_instances[0]!.original_track_b_suggestion?.model_evidence
+      .provider,
+    draft.model_evidence.provider,
   );
 });

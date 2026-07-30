@@ -27,6 +27,7 @@ interface FieldInspectorProps {
   readonly particleInstanceId: string;
   readonly activeTarget: FieldTarget;
   readonly summary: ReviewSummary;
+  readonly busy: boolean;
   readonly liveMessage: string;
   readonly onActivate: (target: FieldTarget) => void;
   readonly onReview: (target: FieldTarget, review: FieldReview) => void;
@@ -37,6 +38,7 @@ export function FieldInspector({
   particleInstanceId,
   activeTarget,
   summary,
+  busy,
   liveMessage,
   onActivate,
   onReview,
@@ -101,7 +103,8 @@ export function FieldInspector({
 
       <fieldset
         className={`field-inspector__body${clip.clip.status === "confirmed" ? " field-inspector__body--read-only" : ""}`}
-        disabled={clip.clip.status === "confirmed"}
+        disabled={clip.clip.status === "confirmed" || busy}
+        aria-busy={busy}
         aria-label="Reviewable coding fields"
       >
         <InspectorSection
@@ -622,7 +625,10 @@ function InspectorSection({
 }>) {
   const remaining = fields.filter(({ state }) => state === "suggested").length;
   return (
-    <details className="inspector-section" defaultOpen={remaining > 0}>
+    <details
+      className="inspector-section"
+      open={remaining > 0 ? true : undefined}
+    >
       <summary>
         <span>{title}</span>
         <small>{remaining === 0 ? "Reviewed" : `${remaining} left`}</small>
@@ -636,10 +642,15 @@ function currentValue<T>(field: ReviewField<T>): T {
   return field.value ?? field.suggestion.value;
 }
 
-function formatRangeField(field: ReviewField<TimeRange>): string {
+function formatRangeField<T extends TimeRange | null>(
+  field: ReviewField<T>,
+): string {
   if (field.state === "skipped") {
     return "Not applicable";
   }
   const range = currentValue(field);
+  if (range === null) {
+    return "No boundary suggested";
+  }
   return formatSourceRange(range.start_ms, range.end_ms);
 }

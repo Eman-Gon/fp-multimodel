@@ -10,11 +10,12 @@ from fp_multimodel.manifest import (
     transcript_sha256,
     write_media_manifest,
 )
-from fp_multimodel.models import Transcript, Utterance
 from fp_multimodel.models import (
     AsrProvenance,
     AsrSuggestionSegment,
+    Transcript,
     TranscriptSuggestion,
+    Utterance,
 )
 
 

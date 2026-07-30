@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from fp_multimodel.vocab import (
     EXTENDED_PARTICLE_CANDIDATES,
@@ -67,7 +69,7 @@ class AsrProvenance(FrozenStrictModel):
 
 
 class TranscriptSuggestion(FrozenStrictModel):
-    """Complete original ASR output, kept separate from the reviewed transcript."""
+    """Original ASR segment suggestions, separate from the reviewed transcript."""
 
     schema_version: Literal[1] = 1
     provenance: AsrProvenance
@@ -86,6 +88,30 @@ class TranscriptSuggestion(FrozenStrictModel):
                 raise ValueError(
                     "ASR suggestion segments must be ordered and non-overlapping"
                 )
+        return self
+
+
+class AsrSuggestionArtifact(FrozenStrictModel):
+    """Content-addressed A2 record kept outside the editable transcript."""
+
+    schema_version: Literal[1] = 1
+    video_id: str = Field(min_length=1)
+    suggestion: TranscriptSuggestion
+    provider_output_json: str = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def validate_provider_output(self) -> "AsrSuggestionArtifact":
+        try:
+            json.loads(self.provider_output_json)
+        except json.JSONDecodeError as error:
+            raise ValueError("provider_output_json must contain valid JSON") from error
+        actual_sha256 = hashlib.sha256(
+            self.provider_output_json.encode("utf-8")
+        ).hexdigest()
+        if actual_sha256 != self.suggestion.provenance.provider_output_sha256:
+            raise ValueError(
+                "provider_output_json does not match provider_output_sha256"
+            )
         return self
 
 
@@ -142,6 +168,15 @@ class SpeakerProfile(StrictModel):
         return self
 
 
+class TranscriptReview(FrozenStrictModel):
+    """Explicit human decision over one ASR-derived working utterance."""
+
+    action: Literal["accept", "edit"]
+    reviewer_id: str = Field(min_length=1, pattern=r".*\S.*")
+    reviewed_at: AwareDatetime
+    evidence: str | None = None
+
+
 class Utterance(StrictModel):
     """One ASR utterance and its human-review state."""
 
@@ -151,9 +186,12 @@ class Utterance(StrictModel):
     text: str = Field(min_length=1)
     surface_text: str = Field(min_length=1)
     speaker: str = Field(min_length=1)
+    # Compatibility projection used to prioritize review. For ASR-origin
+    # transcripts, the authoritative model score remains in asr_suggestion.
     confidence: Confidence | None = None
     source_segment_ids: list[str] = Field(default_factory=list)
     transcript_confirmed: bool = False
+    transcript_review: TranscriptReview | None = None
     linguistic_context: LinguisticContext | None = None
 
     @model_validator(mode="before")
@@ -176,6 +214,10 @@ class Utterance(StrictModel):
             raise ValueError("end_ms must be greater than start_ms")
         if len(self.source_segment_ids) != len(set(self.source_segment_ids)):
             raise ValueError("source_segment_ids must be unique")
+        if self.transcript_review is not None and not self.transcript_confirmed:
+            raise ValueError(
+                "transcript_review requires transcript_confirmed=true"
+            )
         return self
 
 
@@ -193,6 +235,11 @@ class Transcript(StrictModel):
         default=None,
         frozen=True,
     )
+    asr_suggestion_artifact_sha256: str | None = Field(
+        default=None,
+        frozen=True,
+        pattern=r"^[0-9a-f]{64}$",
+    )
     speakers: list[SpeakerProfile] = Field(default_factory=list)
     utterances: list[Utterance]
 
@@ -201,11 +248,21 @@ class Transcript(StrictModel):
         ids = [utterance.id for utterance in self.utterances]
         if len(ids) != len(set(ids)):
             raise ValueError("utterance ids must be unique")
+        speaker_ids = [speaker.id for speaker in self.speakers]
+        if len(speaker_ids) != len(set(speaker_ids)):
+            raise ValueError("speaker ids must be unique within a video")
         if self.transcript_origin == "asr":
             if self.asr_suggestion is None:
                 raise ValueError("ASR transcripts require the original ASR suggestion")
+            if self.asr_suggestion_artifact_sha256 is None:
+                raise ValueError(
+                    "ASR transcripts require a content-addressed suggestion artifact"
+                )
             suggestion_ids = {
                 segment.id for segment in self.asr_suggestion.segments
+            }
+            suggestions_by_id = {
+                segment.id: segment for segment in self.asr_suggestion.segments
             }
             for utterance in self.utterances:
                 if not utterance.source_segment_ids:
@@ -218,18 +275,54 @@ class Transcript(StrictModel):
                         "utterance source_segment_ids must reference the original "
                         "ASR suggestion"
                     )
+                if utterance.transcript_confirmed:
+                    if utterance.transcript_review is None:
+                        raise ValueError(
+                            "confirmed ASR utterances require an explicit "
+                            "transcript_review"
+                        )
+                    if utterance.speaker == "spk_unknown":
+                        raise ValueError(
+                            "confirmed ASR utterances require a reviewed speaker"
+                        )
+                    if utterance.speaker not in speaker_ids:
+                        raise ValueError(
+                            "confirmed ASR utterance speakers require a "
+                            "video speaker profile"
+                        )
+                    if utterance.transcript_review.action == "accept":
+                        if len(utterance.source_segment_ids) != 1:
+                            raise ValueError(
+                                "split or merged ASR utterances require an edit review"
+                            )
+                        suggestion = suggestions_by_id[
+                            utterance.source_segment_ids[0]
+                        ]
+                        suggested_surface = suggestion.surface_text.strip()
+                        if (
+                            utterance.start_ms != suggestion.start_ms
+                            or utterance.end_ms != suggestion.end_ms
+                            or utterance.surface_text != suggested_surface
+                            or utterance.text
+                            != suggested_surface.replace("嗎", "吗")
+                        ):
+                            raise ValueError(
+                                "changed ASR utterances require an edit review"
+                            )
         else:
             if self.asr_suggestion is not None:
                 raise ValueError(
                     "researcher-origin transcripts cannot claim an ASR suggestion"
                 )
+            if self.asr_suggestion_artifact_sha256 is not None:
+                raise ValueError(
+                    "researcher-origin transcripts cannot reference an ASR "
+                    "suggestion artifact"
+                )
             if any(utterance.source_segment_ids for utterance in self.utterances):
                 raise ValueError(
                     "researcher-origin utterances cannot reference ASR segments"
                 )
-        speaker_ids = [speaker.id for speaker in self.speakers]
-        if len(speaker_ids) != len(set(speaker_ids)):
-            raise ValueError("speaker ids must be unique within a video")
         if speaker_ids:
             unknown = sorted(
                 {

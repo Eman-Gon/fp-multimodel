@@ -90,9 +90,30 @@ export interface MotionInterval extends TimeRange {
   readonly confidence?: number | null;
 }
 
+/**
+ * Provider-native evidence is carried beside the schema-constrained gesture
+ * value so strict Pegasus parsing cannot silently discard its provenance.
+ */
+export interface SemanticGestureProviderEvidence {
+  readonly provider: "twelvelabs";
+  readonly model: "pegasus1.5";
+  readonly asset_id: string;
+  readonly provider_window: TimeRange;
+  readonly response_id: string | null;
+  readonly finish_reason: string | null;
+  readonly raw_response: unknown;
+}
+
+export interface SemanticGestureAnalysisResult {
+  readonly kind: "semantic_gesture_analysis";
+  readonly output: unknown;
+  readonly provider_evidence: SemanticGestureProviderEvidence;
+}
+
 export interface GestureModelEvidence {
   readonly pegasus: PegasusGesture;
   readonly mediapipe_intervals: readonly MotionInterval[];
+  readonly provider?: SemanticGestureProviderEvidence;
 }
 
 /**

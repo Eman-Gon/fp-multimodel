@@ -244,6 +244,22 @@ def test_whisper_cli_adapter_forces_mandarin_and_preserves_raw_diagnostics(
     }
     assert result.segments[1].confidence is None
 
+    payload["segments"][0]["avg_logprob"] = 1000
+    saturated_output = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+    def run_saturated(
+        command: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+    ) -> subprocess.CompletedProcess[bytes]:
+        output_dir = Path(command[command.index("--output_dir") + 1])
+        (output_dir / "audio.json").write_bytes(saturated_output)
+        return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+
+    saturated = WhisperCliMandarinAsr(runner=run_saturated).transcribe(audio)
+    assert saturated.segments[0].confidence == 1.0
+
 
 def test_whisper_cli_adapter_rejects_non_mandarin_or_missing_json(
     tmp_path: Path,

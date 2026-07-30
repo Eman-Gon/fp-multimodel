@@ -185,10 +185,10 @@ the verified A1 audio hash and source-video duration. Whisper's
 `avg_logprob` is retained as a provider-native diagnostic; the review-priority
 confidence is `exp(avg_logprob)` and that derivation is named in provenance.
 
-The complete original ASR run is an immutable `asr_suggestion`, separate from
-the editable `utterances` working copy. `source_segment_ids` keeps lineage when
-a reviewer splits or merges rough ASR segments. A reviewed transcript must
-never overwrite or delete its original suggestion.
+The original segment-level ASR suggestion is an immutable `asr_suggestion`,
+separate from the editable `utterances` working copy. `source_segment_ids`
+keeps lineage when a reviewer splits or merges rough ASR segments. A reviewed
+transcript must never overwrite or delete its original suggestion.
 
 Abbreviated output shape:
 ```json

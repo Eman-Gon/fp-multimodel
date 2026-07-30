@@ -3,6 +3,7 @@ import type {
   GestureAnnotationDraft,
   MotionInterval,
   PegasusGesture,
+  SemanticGestureProviderEvidence,
   TimeRange,
 } from "../types.ts";
 import {
@@ -23,6 +24,7 @@ export function reconcileGestureDraft(
   analysisWindow: TimeRange,
   semanticGesture: PegasusGesture,
   motionIntervals: readonly MotionInterval[],
+  providerEvidence?: SemanticGestureProviderEvidence,
 ): GestureAnnotationDraft {
   assertNonEmptyId(videoId, "videoId");
   assertNonEmptyId(instanceId, "instanceId");
@@ -40,6 +42,9 @@ export function reconcileGestureDraft(
     !GESTURE_REGIONS.includes(semanticGesture.gesture_region)
   ) {
     throw new TypeError("semanticGesture.gesture_region is not controlled");
+  }
+  if (providerEvidence !== undefined) {
+    assertProviderEvidence(providerEvidence);
   }
 
   for (const [index, interval] of motionIntervals.entries()) {
@@ -66,7 +71,11 @@ export function reconcileGestureDraft(
     semanticGesture.confidence,
     "pegasus",
   );
-  const modelEvidence = cloneModelEvidence(semanticGesture, motionIntervals);
+  const modelEvidence = cloneModelEvidence(
+    semanticGesture,
+    motionIntervals,
+    providerEvidence,
+  );
 
   if (!gesturePresent) {
     if (
@@ -167,6 +176,7 @@ function assertContained(
 function cloneModelEvidence(
   semanticGesture: PegasusGesture,
   motionIntervals: readonly MotionInterval[],
+  providerEvidence?: SemanticGestureProviderEvidence,
 ): GestureAnnotationDraft["model_evidence"] {
   return {
     pegasus: {
@@ -177,7 +187,44 @@ function cloneModelEvidence(
           : { ...semanticGesture.segment },
     },
     mediapipe_intervals: motionIntervals.map((interval) => ({ ...interval })),
+    ...(providerEvidence === undefined
+      ? {}
+      : {
+          provider: {
+            ...providerEvidence,
+            raw_response: structuredClone(providerEvidence.raw_response),
+          },
+        }),
   };
+}
+
+function assertProviderEvidence(
+  evidence: SemanticGestureProviderEvidence,
+): void {
+  if (
+    evidence.provider !== "twelvelabs" ||
+    evidence.model !== "pegasus1.5"
+  ) {
+    throw new TypeError(
+      "provider evidence must identify TwelveLabs Pegasus 1.5",
+    );
+  }
+  assertNonEmptyId(evidence.asset_id, "provider evidence asset_id");
+  assertTimeRange(evidence.provider_window, "provider evidence provider_window");
+  if (
+    evidence.response_id !== null &&
+    typeof evidence.response_id !== "string"
+  ) {
+    throw new TypeError("provider evidence response_id must be a string or null");
+  }
+  if (
+    evidence.finish_reason !== null &&
+    typeof evidence.finish_reason !== "string"
+  ) {
+    throw new TypeError(
+      "provider evidence finish_reason must be a string or null",
+    );
+  }
 }
 
 function draftField<T>(

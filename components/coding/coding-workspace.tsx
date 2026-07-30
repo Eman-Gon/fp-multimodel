@@ -2,12 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import type { TimeRange } from "@/lib/types.ts";
 import {
-  applyClipCommand,
   listReviewUnits,
-  ReviewCommandError,
   summarizeReview,
   targetKey,
 } from "@/lib/track-c/review.ts";
@@ -40,8 +38,10 @@ export function CodingWorkspace({
   const router = useRouter();
   const [clip, setClip] = useState(initialClip);
   const clipRef = useRef(initialClip);
-  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const pendingSavesRef = useRef(0);
+  const activeRequestRef = useRef<Promise<ClipDetail | null>>(
+    Promise.resolve(null),
+  );
+  const requestInFlightRef = useRef(false);
   const [saveState, setSaveState] = useState<
     "saved" | "saving" | "error"
   >("saved");
@@ -68,69 +68,84 @@ export function CodingWorkspace({
       ({ instance_id }) => instance_id === activeParticleInstanceId,
     ) ?? clip.particle_instances[0];
 
-  const persistCommand = useCallback(
-    (command: ClipCommand) => {
-      pendingSavesRef.current += 1;
-      setSaveState("saving");
+  const loadCanonicalClip = useCallback(async (): Promise<ClipDetail | null> => {
+    try {
+      const response = await fetch(`/api/clips/${initialClip.clip.id}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const body = (await response.json()) as { data?: ClipDetail };
+      if (body.data === undefined) {
+        return null;
+      }
+      clipRef.current = body.data;
+      setClip(body.data);
+      return body.data;
+    } catch {
+      return null;
+    }
+  }, [initialClip.clip.id]);
 
-      saveQueueRef.current = saveQueueRef.current
-        .catch(() => undefined)
-        .then(async () => {
-          const response = await fetch(`/api/clips/${clip.clip.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(command),
-          });
-          if (!response.ok) {
-            const body = (await response.json()) as {
-              error?: { message?: string };
-            };
+  const runCommand = useCallback(
+    async (command: ClipCommand): Promise<ClipDetail | null> => {
+      if (requestInFlightRef.current) {
+        setLiveMessage("Wait for the current review decision to save.");
+        return null;
+      }
+
+      requestInFlightRef.current = true;
+      setSaveState("saving");
+      const request = (async () => {
+        try {
+          const response = await fetch(
+            `/api/clips/${initialClip.clip.id}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(command),
+            },
+          );
+          const body = (await response.json()) as {
+            data?: ClipDetail;
+            error?: { message?: string };
+          };
+          if (!response.ok || body.data === undefined) {
             throw new Error(
               body.error?.message ?? "The review action could not be saved.",
             );
           }
-        })
-        .catch((error: unknown) => {
-          setSaveState("error");
-          setLiveMessage(
-            error instanceof Error ? error.message : "Save failed.",
-          );
-          throw error;
-        })
-        .finally(() => {
-          pendingSavesRef.current -= 1;
-          if (pendingSavesRef.current === 0) {
-            setSaveState((current) =>
-              current === "error" ? current : "saved",
-            );
-          }
-        });
-    },
-    [clip.clip.id],
-  );
 
-  const runCommand = useCallback(
-    (command: ClipCommand): ClipDetail | null => {
-      try {
-        const next = applyClipCommand(clipRef.current, command);
-        clipRef.current = next;
-        setClip(next);
-        persistCommand(command);
-        return next;
-      } catch (error) {
-        const message =
-          error instanceof ReviewCommandError || error instanceof Error
-            ? error.message
-            : "The review action could not be applied.";
-        setLiveMessage(message);
-        return null;
-      }
+          clipRef.current = body.data;
+          setClip(body.data);
+          setSaveState("saved");
+          return body.data;
+        } catch (error) {
+          setSaveState("error");
+          const canonical = await loadCanonicalClip();
+          setLiveMessage(
+            `${error instanceof Error ? error.message : "Save failed."}${
+              canonical === null ? "" : " The latest saved version was restored."
+            }`,
+          );
+          return null;
+        } finally {
+          requestInFlightRef.current = false;
+        }
+      })();
+
+      activeRequestRef.current = request;
+      return request;
     },
-    [persistCommand],
+    [initialClip.clip.id, loadCanonicalClip],
   );
 
   const reviewField = useCallback(
-    (target: FieldTarget, review: FieldReview): ClipDetail | null => {
+    async (
+      target: FieldTarget,
+      review: FieldReview,
+    ): Promise<ClipDetail | null> => {
       if (clipRef.current.clip.status === "confirmed") {
         setLiveMessage(
           "This confirmed clip is read-only. Reset the demo from the queue to rehearse again.",
@@ -138,7 +153,7 @@ export function CodingWorkspace({
         return null;
       }
 
-      return runCommand({
+      return await runCommand({
         expected_version: clipRef.current.version,
         command: "review_field",
         target,
@@ -190,7 +205,7 @@ export function CodingWorkspace({
     [activeTarget, focusTarget],
   );
 
-  const confirmActive = useCallback(() => {
+  const confirmActive = useCallback(async () => {
     const active = listReviewUnits(clipRef.current).find(
       ({ target }) => targetKey(target) === targetKey(activeTarget),
     );
@@ -201,21 +216,21 @@ export function CodingWorkspace({
       focusNextUnresolved(clipRef.current);
       return;
     }
-    const next = reviewField(activeTarget, { action: "accept" });
+    const next = await reviewField(activeTarget, { action: "accept" });
     if (next !== null) {
       setLiveMessage(`${active.label} confirmed.`);
       focusNextUnresolved(next);
     }
   }, [activeTarget, focusNextUnresolved, reviewField]);
 
-  const skipActive = useCallback(() => {
+  const skipActive = useCallback(async () => {
     const active = listReviewUnits(clipRef.current).find(
       ({ target }) => targetKey(target) === targetKey(activeTarget),
     );
     if (active === undefined || active.field.state !== "suggested") {
       return;
     }
-    const next = reviewField(activeTarget, {
+    const next = await reviewField(activeTarget, {
       action: "skip",
       reason: "Reviewer explicitly skipped this field.",
     });
@@ -226,30 +241,20 @@ export function CodingWorkspace({
   }, [activeTarget, focusNextUnresolved, reviewField]);
 
   const navigateToQueue = useCallback(async () => {
-    try {
-      await saveQueueRef.current;
-      router.push("/queue");
-      router.refresh();
-    } catch {
-      setLiveMessage("Resolve the save error before leaving this clip.");
-    }
+    await activeRequestRef.current;
+    router.push("/queue");
+    router.refresh();
   }, [router]);
 
   const navigateToNext = useCallback(async () => {
-    try {
-      await saveQueueRef.current;
-      router.push(
-        nextClipId === null ? "/queue" : `/clips/${nextClipId}`,
-      );
-      router.refresh();
-    } catch {
-      setLiveMessage("Resolve the save error before leaving this clip.");
-    }
+    await activeRequestRef.current;
+    router.push(nextClipId === null ? "/queue" : `/clips/${nextClipId}`);
+    router.refresh();
   }, [nextClipId, router]);
 
-  const confirmClip = useCallback(() => {
+  const confirmClip = useCallback(async () => {
     if (clipRef.current.clip.status === "confirmed") {
-      void navigateToNext();
+      await navigateToNext();
       return;
     }
     const currentSummary = summarizeReview(clipRef.current);
@@ -266,7 +271,7 @@ export function CodingWorkspace({
       return;
     }
 
-    const next = runCommand({
+    const next = await runCommand({
       expected_version: clipRef.current.version,
       command: "confirm_clip",
     });
@@ -299,10 +304,10 @@ export function CodingWorkspace({
         player.stepFrame(1);
       } else if (key === "c") {
         event.preventDefault();
-        confirmActive();
+        void confirmActive();
       } else if (key === "s") {
         event.preventDefault();
-        skipActive();
+        void skipActive();
       } else if (key === "q") {
         event.preventDefault();
         void navigateToQueue();
@@ -332,44 +337,35 @@ export function CodingWorkspace({
   return (
     <main className="coding-workspace">
       <header className="workspace-bar">
-        <div className="workspace-bar__brand">
-          <strong>Final Particle Lab</strong>
-          <span>
-            Demo workspace ·{" "}
+        <div className="workspace-bar__back">
+          <button
+            type="button"
+            onClick={() => void navigateToQueue()}
+          >
+            <ChevronLeft aria-hidden="true" />
+            Back to queue
+          </button>
+          <span className={`save-state save-state--${saveState}`}>
             {saveState === "saving"
-              ? "Saving changes…"
+              ? "Saving…"
               : saveState === "error"
                 ? "Save needs attention"
                 : "All changes saved"}
           </span>
         </div>
         <div className="workspace-bar__sequence">
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Back to coding queue"
-            onClick={() => void navigateToQueue()}
-          >
-            <ChevronLeft aria-hidden="true" />
-          </button>
           <div>
             <span>
               {queuePosition === null
                 ? "Reviewed clip"
                 : `Clip ${queuePosition} of ${queueTotal}`}
             </span>
-            <small>Demo review · human confirmation</small>
+            <small>
+              {summary.remaining === 0
+                ? "Ready to confirm"
+                : `${summary.remaining} review decisions left`}
+            </small>
           </div>
-          <button
-            type="button"
-            className="icon-button"
-            aria-label={
-              nextClipId === null ? "Return to coding queue" : "Next review clip"
-            }
-            onClick={() => void navigateToNext()}
-          >
-            <ChevronRight aria-hidden="true" />
-          </button>
         </div>
         <button
           type="button"
@@ -378,10 +374,11 @@ export function CodingWorkspace({
             clip.clip.status !== "confirmed" &&
             (!summary.ready || saveState === "saving")
           }
+          disabled={saveState === "saving"}
           onClick={
             clip.clip.status === "confirmed"
               ? () => void navigateToNext()
-              : confirmClip
+              : () => void confirmClip()
           }
         >
           {clip.clip.status === "confirmed"
@@ -400,6 +397,7 @@ export function CodingWorkspace({
             clipStartMs={clip.clip.start_ms}
             clipEndMs={clip.clip.end_ms}
             controller={player}
+            illustrative={clip.demo_fixture}
           />
           {clip.particle_instances.length > 1 ? (
             <nav
@@ -435,6 +433,7 @@ export function CodingWorkspace({
             currentSourceMs={player.currentSourceMs}
             fps={clip.video.fps}
             particleTiming={particle.fields.fp_timing}
+            gesturePresent={particle.fields.gesture_present}
             gestureTiming={particle.fields.gesture_timing}
             disabled={clip.clip.status === "confirmed"}
             onSeek={player.seekSourceMs}
@@ -445,40 +444,40 @@ export function CodingWorkspace({
                 field,
               })
             }
-            onCommit={(field, value: TimeRange) =>
-              reviewField(
+            onCommit={(field, value: TimeRange) => {
+              void reviewField(
                 {
                   scope: "particle",
                   instance_id: particle.instance_id,
                   field,
                 },
                 { action: "edit", value },
-              )
-            }
+              );
+            }}
           />
           <TranscriptContext
             text={clip.utterance.text}
             particle={currentParticleToken(particle)}
           />
-          <MeaningContext
-            clip={clip}
-            particleInstanceId={particle.instance_id}
-          />
+          <details className="meaning-disclosure">
+            <summary>Meaning evidence &amp; clip metadata</summary>
+            <MeaningContext
+              clip={clip}
+              particleInstanceId={particle.instance_id}
+            />
+          </details>
         </div>
         <FieldInspector
           clip={clip}
           particleInstanceId={particle.instance_id}
           activeTarget={activeTarget}
           summary={summary}
-          saveState={saveState}
+          busy={saveState === "saving"}
           liveMessage={liveMessage}
           onActivate={activateTarget}
           onReview={(target, review) => {
-            reviewField(target, review);
+            void reviewField(target, review);
           }}
-          onConfirmClip={confirmClip}
-          onReturnToQueue={() => void navigateToNext()}
-          hasNextClip={nextClipId !== null}
         />
       </div>
     </main>

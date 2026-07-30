@@ -1,11 +1,19 @@
 import "server-only";
 
-import { applyClipCommand, listReviewUnits } from "./review.ts";
+import type { GestureAnnotationDraft } from "../types.ts";
+import { buildGraphDataset } from "./graph.ts";
+import type { GraphDataset, GraphScope } from "./graph.ts";
+import {
+  applyClipCommand,
+  listReviewUnits,
+  ReviewCommandError,
+} from "./review.ts";
 import {
   createDemoClip,
   createDemoClips,
   DEMO_CLIP_ID,
 } from "./seed.ts";
+import { mergeTrackBGestureDrafts } from "./track-b-adapter.ts";
 import type {
   ClipCommand,
   ClipDetail,
@@ -28,7 +36,8 @@ function getStore(): Map<string, ClipDetail> {
   }
   const store = storeGlobal[STORE_KEY];
   for (const clip of createDemoClips()) {
-    if (!store.has(clip.clip.id)) {
+    const existing = store.get(clip.clip.id);
+    if (existing === undefined || existing.schema_version !== 3) {
       store.set(clip.clip.id, clip);
     }
   }
@@ -49,6 +58,10 @@ export function listConfirmedExplorerClips(): readonly ConfirmedExplorerClipList
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
+export function listGraphDataset(scope: GraphScope): GraphDataset {
+  return buildGraphDataset(Array.from(getStore().values()), scope);
+}
+
 export function getClipById(clipId: string): ClipDetail | null {
   const clip = getStore().get(clipId);
   return clip === undefined ? null : structuredClone(clip);
@@ -63,6 +76,33 @@ export function updateClip(
     return null;
   }
   const next = applyClipCommand(current, command);
+  getStore().set(clipId, next);
+  return structuredClone(next);
+}
+
+/**
+ * Atomically imports Track B suggestions against the repository's current
+ * version so a stale analysis result cannot overwrite newer human review.
+ */
+export function updateClipWithTrackBDrafts(
+  clipId: string,
+  expectedVersion: number,
+  drafts: readonly GestureAnnotationDraft[],
+): ClipDetail | null {
+  const current = getStore().get(clipId);
+  if (current === undefined) {
+    return null;
+  }
+  if (current.version !== expectedVersion) {
+    throw new ReviewCommandError(
+      "VERSION_CONFLICT",
+      "The clip changed after this Track B import was prepared.",
+      409,
+      { current_version: current.version },
+    );
+  }
+
+  const next = mergeTrackBGestureDrafts(current, drafts);
   getStore().set(clipId, next);
   return structuredClone(next);
 }

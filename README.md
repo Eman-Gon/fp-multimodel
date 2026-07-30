@@ -229,6 +229,8 @@ The provider-independent B1–B3 core lives in `lib/track-b`. It currently:
   reconciled draft
 - merges complete per-instance drafts into an existing Track C clip shell
   without overwriting clip, transcript, participant, or meaning metadata
+- persists those imports through an optimistic-versioned repository/API
+  boundary so stale Track B jobs cannot overwrite newer human review
 - preserves literal no-gesture suggestions (`null` region and boundaries) and
   the full original Track B evidence throughout later human review
 - handles every FP instance independently for multi-particle videos

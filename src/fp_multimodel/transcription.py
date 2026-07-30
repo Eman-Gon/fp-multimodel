@@ -210,7 +210,9 @@ class WhisperCliMandarinAsr:
                 None,
             )
             confidence = (
-                min(1.0, max(0.0, math.exp(avg_logprob)))
+                1.0
+                if avg_logprob is not None and avg_logprob >= 0
+                else math.exp(avg_logprob)
                 if avg_logprob is not None
                 else None
             )
@@ -250,7 +252,7 @@ def create_draft_transcript(
     *,
     default_speaker: str = "spk_unknown",
 ) -> Transcript:
-    """Run ASR over verified A1 audio and preserve its complete original output."""
+    """Run ASR over verified A1 audio and preserve original segment suggestions."""
 
     audio = audio.resolve()
     if not audio.is_file():
