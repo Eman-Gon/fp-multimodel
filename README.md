@@ -23,6 +23,27 @@ Given raw video of native Mandarin speakers, the tool:
 
 A human researcher reviews and corrects the AI's draft coding — transcription and gesture classification are the two places automation is least reliable, so those are built as checkpoints, not black boxes.
 
+## Meaning analysis
+
+The research unit is not the particle by itself. Each reviewed clip brings four
+evidence streams together:
+
+```
+final particle + tone + sentence type / context + gesture
+  → proposed communicative meaning
+```
+
+The proposed meaning and its explanation remain reviewable annotations. The
+software must show the evidence it used instead of presenting an automated
+interpretation as an established linguistic fact.
+
+Each clip also retains its discourse context, corrected utterance, sentence,
+and clause boundaries. This supports both semantic analysis and a later
+learner-facing view that explains how verbal and non-verbal cues coalesce.
+
+The complete product and annotation requirements are recorded in
+[`docs/product-spec.md`](docs/product-spec.md).
+
 ## Why
 
 Manually coding gesture-particle data from video is slow and tedious for research assistants. This tool turns that into a fast review-and-confirm workflow instead of a from-scratch annotation task, then stores the confirmed data as a queryable graph.
@@ -56,6 +77,8 @@ Raw video
 | Transcript Review | Correct draft transcript before alignment |
 | Coding Queue | Clips awaiting review |
 | Coding Interface | Video scrub + correct/confirm gesture & metadata fields |
+| Clip Explorer | Browse confirmed clips grouped by particle and communicative meaning |
+| Clip Detail | View the meaning equation, linguistic context, and reviewed clip metadata |
 | Graph Explorer | Visualize the coded corpus as a graph |
 | Insights | Query confirmed data (e.g. gesture frequency by particle) |
 
