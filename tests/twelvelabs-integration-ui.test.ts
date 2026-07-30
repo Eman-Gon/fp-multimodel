@@ -14,6 +14,7 @@ import {
 } from "../components/integrations/twelvelabs-integration.tsx";
 import {
   analyzeTwelveLabsGesture,
+  createTwelveLabsDestination,
   getTwelveLabsConnectionStatus,
   parseGestureSuggestionPayload,
   startTwelveLabsIndex,
@@ -36,6 +37,33 @@ const trackAParticle = {
   confidence: 0.82,
   confirmed: false,
 } as const;
+
+test("browser can request an automatic TwelveLabs destination", async () => {
+  const requests: RequestInit[] = [];
+  const destination = await createTwelveLabsDestination(
+    "vid03",
+    (async (_input, init) => {
+      requests.push(init ?? {});
+      return jsonResponse({
+        data: {
+          provider: "twelvelabs",
+          video_id: "vid03",
+          index_id: "index-auto",
+        },
+      });
+    }) as typeof fetch,
+  );
+
+  assert.deepEqual(destination, {
+    provider: "twelvelabs",
+    video_id: "vid03",
+    index_id: "index-auto",
+  });
+  assert.deepEqual(JSON.parse(String(requests[0]?.body)), {
+    action: "create_index",
+    video_id: "vid03",
+  });
+});
 const analyzeRequest = {
   video_id: "vid03",
   instance_id: "vid03:u17",

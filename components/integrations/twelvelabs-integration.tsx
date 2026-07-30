@@ -21,6 +21,7 @@ import type { FinalParticleInstance, TimeRange } from "@/lib/types.ts";
 import { humanizeCode } from "@/lib/track-c/display.ts";
 import {
   analyzeTwelveLabsGesture,
+  createTwelveLabsDestination,
   getTwelveLabsConnectionStatus,
   startTwelveLabsIndex,
   TwelveLabsUiRequestError,
@@ -253,7 +254,6 @@ export function TwelveLabsIntegration({
     if (
       connectionState.status !== "configured" ||
       videoId.trim().length === 0 ||
-      indexId.trim().length === 0 ||
       !hasUploadSource ||
       indexState.status === "processing"
     ) {
@@ -266,16 +266,26 @@ export function TwelveLabsIntegration({
     setAnalysisState({ status: "idle" });
 
     try {
+      const destination =
+        indexId.trim().length > 0
+          ? indexId.trim()
+          : (await createTwelveLabsDestination(videoId.trim())).index_id;
+      if (requestId !== indexRequest.current) {
+        return;
+      }
+      if (destination !== indexId) {
+        setIndexId(destination);
+      }
       const result =
         videoFile === null
           ? await startTwelveLabsIndex({
               video_id: videoId.trim(),
-              index_id: indexId.trim(),
+              index_id: destination,
               video_url: videoUrl.trim(),
             })
           : await startTwelveLabsIndex({
               video_id: videoId.trim(),
-              index_id: indexId.trim(),
+              index_id: destination,
               video_file: videoFile,
               filename: videoFile.name,
             });
@@ -457,7 +467,6 @@ export function TwelveLabsIntegrationView({
   const canIndex =
     connectionState.status === "configured" &&
     videoId.trim().length > 0 &&
-    indexId.trim().length > 0 &&
     hasUploadSource &&
     indexState.status !== "processing";
   const canAnalyze =
@@ -569,7 +578,8 @@ export function TwelveLabsIntegrationView({
                 spellCheck={false}
               />
               <small>
-                Use the destination index ID from your TwelveLabs account.
+                Optional. Leave blank and the app will create a Pegasus index
+                automatically.
               </small>
             </label>
             <label

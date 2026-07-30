@@ -43,6 +43,42 @@ test("status remains a safe 200 when the provider is not configured", async (t) 
   assert.equal(body.data.configured, false);
 });
 
+test("blank-index setup creates a video-scoped Pegasus destination", async (t) => {
+  const restoreEnvironment = setApiKey("server-secret");
+  const requests: Array<{ readonly url: string; readonly body: unknown }> = [];
+  const restoreFetch = setFetch(async (input, init) => {
+    requests.push({
+      url: String(input),
+      body: JSON.parse(String(init?.body)),
+    });
+    return jsonResponse({ _id: "index-auto" }, 201);
+  });
+  t.after(() => {
+    restoreFetch();
+    restoreEnvironment();
+  });
+
+  const response = await indexVideo(
+    jsonRequest("/api/integrations/twelvelabs/index", {
+      action: "create_index",
+      video_id: "vid-03",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.data, {
+    provider: "twelvelabs",
+    video_id: "vid-03",
+    index_id: "index-auto",
+  });
+  assert.match(requests[0]?.url ?? "", /\/indexes$/);
+  assert.match(
+    String((requests[0]?.body as { index_name?: string }).index_name),
+    /^final-particle-vid-03-/,
+  );
+});
+
 test("index upload preserves local and provider identities", async (t) => {
   const restoreEnvironment = setApiKey("server-secret");
   const restoreFetch = setFetch(async () =>

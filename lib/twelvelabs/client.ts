@@ -27,6 +27,10 @@ export interface TwelveLabsIndexedAsset {
   readonly status: TwelveLabsIndexedAssetStatus;
 }
 
+export interface TwelveLabsIndex {
+  readonly id: string;
+}
+
 export interface TwelveLabsProviderAnalyzeResponse {
   readonly id: string | null;
   readonly data: string;
@@ -87,6 +91,25 @@ export class TwelveLabsClient {
     this.#baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  }
+
+  async createIndex(indexName: string): Promise<TwelveLabsIndex> {
+    assertNonEmpty(indexName, "index_name");
+    const raw = await this.#request("/indexes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        index_name: indexName,
+        models: [
+          {
+            model_name: "pegasus1.2",
+            model_options: ["visual", "audio"],
+          },
+        ],
+      }),
+    });
+    const value = asRecord(raw, "TwelveLabs index response");
+    return { id: readProviderId(value) };
   }
 
   async createAssetFromUrl(
@@ -374,6 +397,16 @@ function readString(value: Record<string, unknown>, key: string): string {
     );
   }
   return field;
+}
+
+function readProviderId(value: Record<string, unknown>): string {
+  const id = value._id ?? value.id;
+  if (typeof id !== "string" || id.length === 0) {
+    throw invalidProviderResponse(
+      "TwelveLabs response field _id was not a string.",
+    );
+  }
+  return id;
 }
 
 function readNullableString(

@@ -3,6 +3,7 @@ import type {
   TwelveLabsIndexedAsset,
 } from "@/lib/twelvelabs/client.ts";
 import type {
+  TwelveLabsCreateDestinationRequest,
   TwelveLabsCreateIndexRequest,
   TwelveLabsIndexData,
   TwelveLabsIndexRequest,
@@ -32,7 +33,10 @@ interface UploadFileCommand {
   readonly filename?: string;
 }
 
-type IndexRouteCommand = TwelveLabsIndexRequest | UploadFileCommand;
+type IndexRouteCommand =
+  | TwelveLabsIndexRequest
+  | TwelveLabsCreateDestinationRequest
+  | UploadFileCommand;
 
 export async function POST(request: Request): Promise<Response> {
   const parsed = await parseCommand(request);
@@ -43,6 +47,14 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const client = createTwelveLabsClient();
     switch (parsed.action) {
+      case "create_index": {
+        const index = await client.createIndex(indexNameForVideo(parsed.video_id));
+        return jsonData({
+          provider: "twelvelabs",
+          video_id: parsed.video_id,
+          index_id: index.id,
+        });
+      }
       case "upload": {
         const asset =
           "video_url" in parsed
@@ -129,14 +141,28 @@ async function parseCommand(
       ? "upload"
       : value.action;
   if (
+    inferredAction !== "create_index" &&
     inferredAction !== "upload" &&
     inferredAction !== "index" &&
     inferredAction !== "status"
   ) {
     return invalidRequestResponse(
-      "action must be upload, index, or status.",
+      "action must be create_index, upload, index, or status.",
       requestVideoContext(value),
     );
+  }
+
+  if (inferredAction === "create_index") {
+    const videoId = readRequiredString(value, "video_id");
+    if (videoId === null) {
+      return invalidRequestResponse(
+        "create_index requests require a non-empty video_id.",
+      );
+    }
+    return {
+      action: "create_index",
+      video_id: videoId,
+    } satisfies TwelveLabsCreateDestinationRequest;
   }
 
   const common = parseCommonFields(value);
@@ -297,8 +323,18 @@ function readOptionalFormString(
     : undefined;
 }
 
+function indexNameForVideo(videoId: string): string {
+  const safeVideoId =
+    videoId
+      .trim()
+      .replace(/[^A-Za-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "video";
+  return `final-particle-${safeVideoId}-${Date.now().toString(36)}`;
+}
+
 function uploadResponse(
-  command: Pick<IndexRouteCommand, "video_id" | "index_id">,
+  command: { readonly video_id: string; readonly index_id: string },
   asset: TwelveLabsAsset,
 ): Response {
   const status = asset.status === "ready" ? "ready" : asset.status;
@@ -318,7 +354,7 @@ function uploadResponse(
 }
 
 function indexingResponse(
-  command: Pick<IndexRouteCommand, "video_id" | "index_id">,
+  command: { readonly video_id: string; readonly index_id: string },
   indexedAsset: TwelveLabsIndexedAsset,
   httpStatus = 200,
 ): Response {

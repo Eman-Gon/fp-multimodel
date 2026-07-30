@@ -41,6 +41,32 @@ test("blank server configuration fails with a safe typed error", () => {
   );
 });
 
+test("creates a Pegasus index for automatic upload setup", async () => {
+  const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
+  const client = new TwelveLabsClient({
+    apiKey: "server-secret",
+    baseUrl: TWELVELABS_API_BASE_URL,
+    fetch: (async (input, init) => {
+      calls.push({ url: String(input), init: init ?? {} });
+      return jsonResponse({ _id: "index-auto" }, 201);
+    }) as typeof fetch,
+  });
+
+  const index = await client.createIndex("final-particle-vid03");
+
+  assert.deepEqual(index, { id: "index-auto" });
+  assert.equal(calls[0]?.url, `${TWELVELABS_API_BASE_URL}/indexes`);
+  assert.deepEqual(JSON.parse(String(calls[0]?.init.body)), {
+    index_name: "final-particle-vid03",
+    models: [
+      {
+        model_name: "pegasus1.2",
+        model_options: ["visual", "audio"],
+      },
+    ],
+  });
+});
+
 test("direct URL upload and separate indexing preserve the local video id", async () => {
   const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
   const responses = [

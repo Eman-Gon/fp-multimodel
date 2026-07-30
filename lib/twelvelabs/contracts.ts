@@ -34,6 +34,17 @@ export type TwelveLabsStatusData = TwelveLabsConfigurationStatus;
 export type TwelveLabsStatusResponse =
   ApiDataResponse<TwelveLabsStatusData>;
 
+export interface TwelveLabsCreateDestinationRequest {
+  readonly action: "create_index";
+  readonly video_id: string;
+}
+
+export interface TwelveLabsCreateDestinationData {
+  readonly provider: "twelvelabs";
+  readonly video_id: string;
+  readonly index_id: string;
+}
+
 interface TwelveLabsIndexRequestBase {
   readonly video_id: string;
   readonly index_id: string;

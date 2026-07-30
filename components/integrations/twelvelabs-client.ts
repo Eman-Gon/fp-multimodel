@@ -3,6 +3,8 @@ import { parsePegasusGesture } from "@/lib/track-b/pegasus.ts";
 import type {
   ApiErrorResponse,
   TwelveLabsAnalyzeRequest,
+  TwelveLabsCreateDestinationData,
+  TwelveLabsCreateDestinationRequest,
   TwelveLabsIndexData,
   TwelveLabsIndexRequest,
   TwelveLabsIndexWorkflowRequest,
@@ -133,6 +135,48 @@ export async function sendTwelveLabsIndexCommand(
     );
   }
   return parseIndexPayload(payload, request, response.status);
+}
+
+export async function createTwelveLabsDestination(
+  videoId: string,
+  fetcher: Fetcher = fetch,
+): Promise<TwelveLabsCreateDestinationData> {
+  requireNonEmpty(videoId, "video_id");
+  const request: TwelveLabsCreateDestinationRequest = {
+    action: "create_index",
+    video_id: videoId.trim(),
+  };
+  const response = await fetcher(TWELVELABS_INDEX_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+  const payload = await readResponsePayload(response);
+  if (!response.ok) {
+    throw responseError(
+      response,
+      payload,
+      "The server could not create a TwelveLabs index.",
+    );
+  }
+  const data = unwrapData(payload);
+  if (
+    !isRecord(data) ||
+    data.provider !== "twelvelabs" ||
+    data.video_id !== request.video_id ||
+    typeof data.index_id !== "string" ||
+    data.index_id.length === 0
+  ) {
+    throw invalidResponse("index destination");
+  }
+  return {
+    provider: "twelvelabs",
+    video_id: data.video_id,
+    index_id: data.index_id,
+  };
 }
 
 export async function sendTwelveLabsFileUploadCommand(
