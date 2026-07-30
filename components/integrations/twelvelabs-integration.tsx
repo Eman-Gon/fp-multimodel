@@ -351,8 +351,8 @@ export function TwelveLabsIntegrationView({
             className="twelvelabs-index-form"
             onSubmit={(event) => submit(event, onStartIndexing)}
           >
-            <label className="twelvelabs-field" htmlFor="twelvelabs-video-id">
-              <span>video_id</span>
+            <div className="twelvelabs-field">
+              <label htmlFor="twelvelabs-video-id">video_id</label>
               <input
                 id="twelvelabs-video-id"
                 name="video_id"
@@ -368,7 +368,7 @@ export function TwelveLabsIntegrationView({
               <small id="twelvelabs-video-id-help">
                 Choose a known source video or enter a stable video_id.
               </small>
-            </label>
+            </div>
             <datalist id="twelvelabs-video-options">
               {videoOptions.map((option) => (
                 <option value={option.video_id} key={option.video_id}>

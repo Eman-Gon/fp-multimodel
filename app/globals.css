@@ -3986,7 +3986,7 @@ kbd {
   gap: 6px;
 }
 
-.twelvelabs-field > span,
+.twelvelabs-field > label,
 .twelvelabs-time-field > span {
   color: #343b44;
   font-size: 11px;
