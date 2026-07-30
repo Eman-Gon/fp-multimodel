@@ -9,6 +9,7 @@ import { GET as statusRoute } from "../app/api/integrations/twelvelabs/status/ro
 import {
   TwelveLabsIntegrationView,
   type TwelveLabsIntegrationViewProps,
+  videoFileValidationMessage,
   windowValidationMessage,
 } from "../components/integrations/twelvelabs-integration.tsx";
 import {
@@ -119,6 +120,75 @@ test("browser indexing completes the real upload, polling, and index route seque
   assert.equal(JSON.stringify(result).includes(secret), false);
 });
 
+test("browser local-file indexing uses multipart upload and preserves the full result", async (t) => {
+  const secret = "file-index-ui-secret";
+  const restoreEnvironment = setApiKey(secret);
+  const providerResponses = [
+    assetResponse("ready"),
+    assetResponse("ready"),
+    jsonResponse({
+      _id: "indexed-456",
+      asset_id: "asset-123",
+      user_metadata: { video_id: "vid03" },
+    }),
+    jsonResponse({
+      _id: "indexed-456",
+      asset_id: "asset-123",
+      status: "ready",
+      user_metadata: { video_id: "vid03" },
+    }),
+  ];
+  const restoreFetch = setFetch(async () => {
+    const response = providerResponses.shift();
+    assert.ok(response);
+    return response;
+  });
+  t.after(() => {
+    restoreFetch();
+    restoreEnvironment();
+  });
+
+  const videoFile = new File(
+    [new Uint8Array([0, 1, 2])],
+    "one-minute.mp4",
+    { type: "video/mp4" },
+  );
+  let browserRequestCount = 0;
+  const inspectingFetcher: typeof fetch = async (input, init) => {
+    browserRequestCount += 1;
+    if (browserRequestCount === 1) {
+      assert.ok(init?.body instanceof FormData);
+      assert.equal(init.body.get("action"), "upload");
+      assert.equal(init.body.get("video_id"), "vid03");
+      assert.equal(init.body.get("index_id"), "index-789");
+      const uploadedFile = init.body.get("video_file");
+      assert.ok(uploadedFile instanceof File);
+      assert.equal(uploadedFile.name, "one-minute.mp4");
+      assert.equal(uploadedFile.size, 3);
+      assert.equal(
+        new Headers(init.headers).get("content-type"),
+        null,
+      );
+    }
+    return routeFetcher(input, init);
+  };
+
+  const result = await startTwelveLabsIndex(
+    {
+      video_id: "vid03",
+      index_id: "index-789",
+      video_file: videoFile,
+    },
+    inspectingFetcher,
+    { poll_interval_ms: 0, max_poll_attempts: 3 },
+  );
+
+  assert.deepEqual(result, readyIndexResult());
+  assert.equal(browserRequestCount, 3);
+  assert.equal(providerResponses.length, 0);
+  assert.equal(JSON.stringify(result).includes(secret), false);
+});
+
 test("browser analysis reaches the real route and retains identity, draft state, and provenance", async (t) => {
   const secret = "analysis-ui-secret";
   const restoreEnvironment = setApiKey(secret);
@@ -210,6 +280,57 @@ test("the result view keeps IDs, provenance, and human-review labeling visible",
   assert.match(markup, /retained Track A timing is read-only/i);
 });
 
+test("the setup view exposes a local video picker and visible indexing IDs", () => {
+  const videoFile = new File(
+    [new Uint8Array(1_536)],
+    "one-minute.mp4",
+    { type: "video/mp4" },
+  );
+  const markup = renderView({
+    videoId: "new-video-001",
+    videoUrl: "",
+    videoFile,
+    connectionState: { status: "configured" },
+    indexState: {
+      status: "ready",
+      result: {
+        ...readyIndexResult(),
+        video_id: "new-video-001",
+      },
+    },
+    analysisState: { status: "idle" },
+  });
+
+  assert.match(markup, /id="twelvelabs-video-file"/);
+  assert.match(markup, /name="video_file"/);
+  assert.match(markup, /type="file"/);
+  assert.match(markup, /accept="video\/\*,\.mp4,\.mov,\.m4v,\.webm"/);
+  assert.match(markup, /Local video file/);
+  assert.match(markup, /one-minute\.mp4/);
+  assert.match(markup, /1\.5 KB/);
+  assert.match(markup, /Upload &amp; index file/);
+  assert.match(markup, /Upload and indexing complete/);
+  assert.match(markup, /asset-123/);
+  assert.match(markup, /indexed-456/);
+  assert.match(markup, /Demo timing is never applied to a new upload/);
+});
+
+test("local file validation enforces the shared 200 MB browser limit", () => {
+  assert.equal(videoFileValidationMessage(null), null);
+  assert.match(
+    videoFileValidationMessage({ size: 0 }) ?? "",
+    /non-empty/,
+  );
+  assert.equal(
+    videoFileValidationMessage({ size: 200 * 1024 * 1024 }),
+    null,
+  );
+  assert.match(
+    videoFileValidationMessage({ size: 200 * 1024 * 1024 + 1 }) ?? "",
+    /200 MB or smaller/,
+  );
+});
+
 test("browser parsing rejects malformed nested model evidence", () => {
   const annotation = suggestionFixture().annotation;
   const fractionalMotionPayload = {
@@ -296,7 +417,7 @@ test("loading, empty, and failed states expose accessible status semantics", () 
   });
   assert.match(loadingMarkup, /aria-busy="true"/);
   assert.match(loadingMarkup, /role="status"/);
-  assert.match(loadingMarkup, /Indexing…/);
+  assert.match(loadingMarkup, /indexing…/i);
   assert.match(loadingMarkup, /Analyzing…/);
 
   const emptyMarkup = renderView({
@@ -356,10 +477,11 @@ test("analysis window validation enforces integer source-video bounds", () => {
 });
 
 function renderView(
-  states: Pick<
+  overrides: Pick<
     TwelveLabsIntegrationViewProps,
     "connectionState" | "indexState" | "analysisState"
-  >,
+  > &
+    Partial<TwelveLabsIntegrationViewProps>,
 ): string {
   const props = {
     videoOptions: [videoOption()],
@@ -367,17 +489,20 @@ function renderView(
     instanceId: "vid03:u17",
     indexId: "index-789",
     videoUrl: "https://media.example/source.mp4",
+    videoFile: null,
+    fileInputResetKey: 0,
     windowDraft: {
       window_start_ms: analysisWindow.start_ms,
       window_end_ms: analysisWindow.end_ms,
       particle_start_ms: particleInterval.start_ms,
       particle_end_ms: particleInterval.end_ms,
     },
-    ...states,
+    ...overrides,
     onVideoIdChange() {},
     onInstanceIdChange() {},
     onIndexIdChange() {},
     onVideoUrlChange() {},
+    onVideoFileChange() {},
     onWindowValueChange() {},
     onCheckConnection() {},
     onStartIndexing() {},

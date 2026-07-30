@@ -3973,7 +3973,7 @@ kbd {
 
 .twelvelabs-index-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 184px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
   gap: 20px;
 }
@@ -4006,6 +4006,25 @@ kbd {
   font-size: 12px;
 }
 
+.twelvelabs-field input[type="file"] {
+  height: auto;
+  min-height: 40px;
+  padding: 4px;
+}
+
+.twelvelabs-field input[type="file"]::file-selector-button {
+  min-height: 30px;
+  margin-right: 9px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--ink);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
 .twelvelabs-time-field input {
   font-variant-numeric: tabular-nums;
 }
@@ -4022,6 +4041,34 @@ kbd {
   padding: 0 16px;
 }
 
+.twelvelabs-index-form .twelvelabs-primary-action {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
+.twelvelabs-file-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 9px;
+  border: 1px solid #c8c5ff;
+  border-radius: 4px;
+  background: var(--indigo-soft);
+  color: #3f3997;
+  font-size: 10px;
+}
+
+.twelvelabs-file-summary strong {
+  overflow-wrap: anywhere;
+}
+
+.twelvelabs-file-summary span {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
 .twelvelabs-operation {
   min-height: 67px;
   margin-top: 13px;
@@ -4029,6 +4076,11 @@ kbd {
   border: 1px solid var(--line);
   border-left-width: 3px;
   background: var(--surface-soft);
+}
+
+.twelvelabs-operation > div {
+  min-width: 0;
+  flex: 1;
 }
 
 .twelvelabs-operation > svg {
@@ -4237,6 +4289,50 @@ kbd {
   color: var(--danger);
 }
 
+.twelvelabs-ingest-note {
+  margin: -3px 0 14px;
+  padding: 11px 13px;
+  border-left: 3px solid var(--indigo);
+  background: var(--indigo-soft);
+  color: #3f3997;
+}
+
+.twelvelabs-ingest-note strong {
+  font-size: 11px;
+}
+
+.twelvelabs-ingest-note p {
+  margin: 4px 0 0;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.twelvelabs-operation__details {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.twelvelabs-operation__details div {
+  min-width: 0;
+}
+
+.twelvelabs-operation__details dt {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.twelvelabs-operation__details dd {
+  overflow: hidden;
+  margin: 3px 0 0;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .twelvelabs-analyze-action {
   min-width: 238px;
   min-height: 44px;
@@ -4378,7 +4474,7 @@ kbd {
   }
 
   .twelvelabs-index-form {
-    grid-template-columns: minmax(0, 1fr) 170px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .twelvelabs-time-fields {
@@ -4426,6 +4522,10 @@ kbd {
   .twelvelabs-primary-action,
   .twelvelabs-analyze-action {
     width: 100%;
+  }
+
+  .twelvelabs-operation__details {
+    grid-template-columns: 1fr;
   }
 
   .twelvelabs-window-heading {

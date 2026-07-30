@@ -1300,6 +1300,21 @@ function validWindowContext(
   };
 }
 
+export function videoFileValidationMessage(
+  file: Pick<File, "size"> | null,
+): string | null {
+  if (file === null) {
+    return null;
+  }
+  if (file.size < 1) {
+    return "Choose a non-empty video file.";
+  }
+  if (file.size > TWELVELABS_MAX_DIRECT_UPLOAD_BYTES) {
+    return "The video file must be 200 MB or smaller.";
+  }
+  return null;
+}
+
 export function windowValidationMessage(
   draft: AnalysisWindowDraft,
   videoDurationMs?: number,
@@ -1362,6 +1377,16 @@ function submit(event: FormEvent<HTMLFormElement>, action: () => void) {
 
 function formatMilliseconds(milliseconds: number): string {
   return `${milliseconds.toLocaleString("en-US")} ms`;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes.toLocaleString("en-US")} ${bytes === 1 ? "byte" : "bytes"}`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function formatRange(range: TimeRange): string {
