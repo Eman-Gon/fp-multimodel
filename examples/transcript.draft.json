@@ -10,7 +10,7 @@
       "task": "transcribe",
       "confidence_method": "exp_avg_logprob",
       "source_audio_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-      "provider_output_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      "provider_output_sha256": "8a66d2c4da7619f72baf5641b75244d8d7e57bec1fb94d3ed2dfcdc45987db03"
     },
     "segments": [
       {
@@ -30,6 +30,7 @@
       }
     ]
   },
+  "asr_suggestion_artifact_sha256": "93203bf3b0e700bf7dae2e23a2a7e5d74a813579cb13290f0c3032f9eca881db",
   "speakers": [],
   "utterances": [
     {
@@ -44,6 +45,7 @@
         "u000001"
       ],
       "transcript_confirmed": false,
+      "transcript_review": null,
       "linguistic_context": null
     }
   ]

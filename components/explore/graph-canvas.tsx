@@ -267,7 +267,24 @@ export function GraphCanvas({
             setEngineRunning(false);
             if (!hasFit.current) {
               hasFit.current = true;
-              fitGraph();
+              const selectedNode = canvasData.nodes.find(
+                ({ id }) => id === selectedNodeId,
+              );
+              if (
+                selectedNode !== undefined &&
+                typeof selectedNode.x === "number" &&
+                typeof selectedNode.y === "number"
+              ) {
+                const duration = reduceMotion ? 0 : 420;
+                graphRef.current?.centerAt(
+                  selectedNode.x,
+                  selectedNode.y,
+                  duration,
+                );
+                graphRef.current?.zoom(2.15, duration);
+              } else {
+                fitGraph();
+              }
             }
           }}
         />

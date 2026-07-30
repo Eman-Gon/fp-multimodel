@@ -8,11 +8,14 @@ import pytest
 from pydantic import ValidationError
 
 from fp_multimodel.manifest import (
+    ASR_SUGGESTION_DIRECTORY,
     MediaManifest,
     file_sha256,
+    load_asr_suggestion_artifact,
     transcript_sha256,
     write_media_manifest,
 )
+from fp_multimodel.jsonio import load_transcript
 from fp_multimodel.models import Transcript
 from fp_multimodel.transcription import (
     AsrRun,
@@ -26,13 +29,31 @@ from fp_multimodel.transcription import (
 class FakeMandarinAsr:
     def transcribe(self, audio: Path) -> AsrRun:
         assert audio.name == "audio.wav"
+        provider_output_json = json.dumps(
+            {
+                "provider": "fake_mandarin_asr",
+                "segments": [
+                    {
+                        "id": "provider-7",
+                        "start_ms": 12_400,
+                        "end_ms": 15_100,
+                        "text": "你吃飯了嗎",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
         return AsrRun(
             provider="fake_mandarin_asr",
             model="fake-model-1",
             language="zh",
             task="transcribe",
             confidence_method="provider",
-            provider_output_sha256="d" * 64,
+            provider_output_sha256=hashlib.sha256(
+                provider_output_json.encode("utf-8")
+            ).hexdigest(),
+            provider_output_json=provider_output_json,
             segments=(
                 AsrSegment(
                     id="u1",
@@ -81,6 +102,7 @@ def test_provider_output_is_always_an_unconfirmed_normalized_draft(
 
     assert transcript.transcript_origin == "asr"
     assert transcript.asr_suggestion is not None
+    assert transcript.asr_suggestion_artifact_sha256 is not None
     assert transcript.asr_suggestion.provenance.provider == "fake_mandarin_asr"
     assert (
         transcript.asr_suggestion.provenance.source_audio_sha256
@@ -97,6 +119,17 @@ def test_provider_output_is_always_an_unconfirmed_normalized_draft(
     assert utterance.surface_text == "你吃飯了嗎"
     assert utterance.source_segment_ids == ["u1"]
     assert utterance.transcript_confirmed is False
+    artifact = load_asr_suggestion_artifact(
+        tmp_path,
+        transcript.asr_suggestion_artifact_sha256,
+    )
+    assert artifact.video_id == "vid1"
+    assert artifact.suggestion == transcript.asr_suggestion
+    assert (
+        tmp_path
+        / ASR_SUGGESTION_DIRECTORY
+        / f"{transcript.asr_suggestion_artifact_sha256}.json"
+    ).is_file()
 
     with pytest.raises(ValidationError, match="frozen"):
         transcript.asr_suggestion = None
@@ -125,12 +158,30 @@ def test_reviewed_working_copy_can_change_without_losing_asr_suggestion(
             "surface_text": "你吃饭了吗",
             "speaker": "spkB",
             "transcript_confirmed": True,
+            "transcript_review": {
+                "action": "edit",
+                "reviewer_id": "researcher-1",
+                "reviewed_at": "2026-07-30T20:00:00Z",
+                "evidence": "Corrected characters, timing, and speaker.",
+            },
         }
     ]
-
-    reviewed = Transcript.model_validate_json(
-        json.dumps(payload, ensure_ascii=False)
+    payload["speakers"] = [
+        {
+            "id": "spkB",
+            "label": "Speaker B",
+            "region": None,
+            "region_source": None,
+            "region_confirmed": False,
+        }
+    ]
+    reviewed_path = tmp_path / "transcript.reviewed.json"
+    reviewed_path.write_text(
+        json.dumps(payload, ensure_ascii=False),
+        encoding="utf-8",
     )
+
+    reviewed = load_transcript(reviewed_path)
 
     assert reviewed.asr_suggestion == original_suggestion
     assert reviewed.utterances[0].source_segment_ids == ["u1"]
@@ -138,6 +189,54 @@ def test_reviewed_working_copy_can_change_without_losing_asr_suggestion(
     assert reviewed.utterances[0].speaker == "spkB"
     assert reviewed.utterances[0].transcript_confirmed is True
     assert transcript_sha256(reviewed) != draft_hash
+
+
+def test_loading_rejects_changed_or_discarded_original_asr_suggestion(
+    tmp_path: Path,
+) -> None:
+    draft = create_draft_transcript(
+        "vid1",
+        make_verified_audio(tmp_path),
+        FakeMandarinAsr(),
+    )
+    payload = draft.model_dump(mode="json")
+    changed = json.loads(json.dumps(payload, ensure_ascii=False))
+    changed["asr_suggestion"]["segments"][0]["surface_text"] = "被覆盖"
+    changed_path = tmp_path / "changed.json"
+    changed_path.write_text(
+        json.dumps(changed, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="changed the original ASR suggestion"):
+        load_transcript(changed_path)
+
+    discarded = json.loads(json.dumps(payload, ensure_ascii=False))
+    discarded["transcript_origin"] = "researcher"
+    discarded["asr_suggestion"] = None
+    discarded["asr_suggestion_artifact_sha256"] = None
+    discarded["utterances"][0]["source_segment_ids"] = []
+    discarded_path = tmp_path / "discarded.json"
+    discarded_path.write_text(
+        json.dumps(discarded, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="cannot discard existing ASR"):
+        load_transcript(discarded_path)
+
+
+def test_loading_rejects_legacy_transcript_without_explicit_origin(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "legacy.json"
+    path.write_text(
+        json.dumps({"video_id": "vid1", "speakers": [], "utterances": []}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="requires explicit transcript_origin"):
+        load_transcript(path)
 
 
 def test_multiple_videos_remain_separate_in_a_draft_batch(tmp_path: Path) -> None:
@@ -231,7 +330,8 @@ def test_whisper_cli_adapter_forces_mandarin_and_preserves_raw_diagnostics(
     assert result.segments[0].provider_segment_id == "10"
     assert result.segments[0].start_ms == 334
     assert result.segments[0].end_ms == 1_235
-    assert result.segments[0].text == "你吃飯了嗎"
+    assert result.segments[0].text == " 你吃飯了嗎 "
+    assert result.provider_output_json == raw_output.decode("utf-8")
     assert result.segments[0].confidence == pytest.approx(math.exp(-0.2))
     assert {
         diagnostic.name: diagnostic.value

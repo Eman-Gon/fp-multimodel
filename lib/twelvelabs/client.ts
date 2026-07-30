@@ -245,7 +245,7 @@ export class TwelveLabsClient {
         headers,
         signal: controller.signal,
       });
-    } catch (error) {
+    } catch {
       if (controller.signal.aborted) {
         throw new TwelveLabsError(
           "TWELVELABS_TIMEOUT",
@@ -264,11 +264,10 @@ export class TwelveLabsClient {
       clearTimeout(timeout);
     }
 
-    const raw = await readResponseBody(response);
     if (!response.ok) {
       throw providerErrorForStatus(response.status);
     }
-    return raw;
+    return readResponseBody(response);
   }
 }
 
@@ -467,4 +466,3 @@ function isIndexedAssetStatus(
     value === "failed"
   );
 }
-

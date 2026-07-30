@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import pytest
 from pydantic import ValidationError
 
@@ -13,6 +15,7 @@ from fp_multimodel.models import (
     SpeakerProfile,
     Transcript,
     TranscriptBatch,
+    TranscriptReview,
     TranscriptSuggestion,
     Utterance,
     VideoReference,
@@ -102,6 +105,7 @@ def test_asr_transcript_requires_immutable_suggestion_lineage() -> None:
         video_id="vid1",
         transcript_origin="asr",
         asr_suggestion=suggestion,
+        asr_suggestion_artifact_sha256="c" * 64,
         utterances=[utterance],
     )
     assert transcript.asr_suggestion is suggestion
@@ -110,6 +114,7 @@ def test_asr_transcript_requires_immutable_suggestion_lineage() -> None:
         Transcript(
             video_id="vid1",
             transcript_origin="asr",
+            asr_suggestion_artifact_sha256="c" * 64,
             utterances=[utterance],
         )
     with pytest.raises(ValidationError, match="cannot claim an ASR suggestion"):
@@ -124,12 +129,123 @@ def test_asr_transcript_requires_immutable_suggestion_lineage() -> None:
             video_id="vid1",
             transcript_origin="asr",
             asr_suggestion=suggestion,
+            asr_suggestion_artifact_sha256="c" * 64,
             utterances=[
                 utterance.model_copy(
                     update={"source_segment_ids": ["missing-segment"]}
                 )
             ],
         )
+
+
+def test_confirmed_asr_transcript_requires_human_review_and_speaker_profile() -> None:
+    suggestion = TranscriptSuggestion(
+        provenance=AsrProvenance(
+            provider="openai_whisper_cli",
+            model="large-v3",
+            language="zh",
+            task="transcribe",
+            confidence_method="exp_avg_logprob",
+            source_audio_sha256="a" * 64,
+            provider_output_sha256="b" * 64,
+        ),
+        segments=(
+            AsrSuggestionSegment(
+                id="source-1",
+                provider_segment_id="0",
+                start_ms=1000,
+                end_ms=2000,
+                surface_text="你好吗",
+            ),
+        ),
+    )
+    review = TranscriptReview(
+        action="accept",
+        reviewer_id="researcher-1",
+        reviewed_at=datetime(2026, 7, 30, 20, 0, tzinfo=timezone.utc),
+    )
+
+    with pytest.raises(ValidationError, match="explicit transcript_review"):
+        Transcript(
+            video_id="vid1",
+            transcript_origin="asr",
+            asr_suggestion=suggestion,
+            asr_suggestion_artifact_sha256="c" * 64,
+            utterances=[
+                Utterance(
+                    id="u1",
+                    start_ms=1000,
+                    end_ms=2000,
+                    text="你好吗",
+                    speaker="spkA",
+                    source_segment_ids=["source-1"],
+                    transcript_confirmed=True,
+                )
+            ],
+        )
+
+    with pytest.raises(ValidationError, match="reviewed speaker"):
+        Transcript(
+            video_id="vid1",
+            transcript_origin="asr",
+            asr_suggestion=suggestion,
+            asr_suggestion_artifact_sha256="c" * 64,
+            speakers=[SpeakerProfile(id="spkA", label="Speaker A")],
+            utterances=[
+                Utterance(
+                    id="u1",
+                    start_ms=1000,
+                    end_ms=2000,
+                    text="你好吗",
+                    speaker="spk_unknown",
+                    source_segment_ids=["source-1"],
+                    transcript_confirmed=True,
+                    transcript_review=review,
+                )
+            ],
+        )
+
+    with pytest.raises(ValidationError, match="changed ASR utterances"):
+        Transcript(
+            video_id="vid1",
+            transcript_origin="asr",
+            asr_suggestion=suggestion,
+            asr_suggestion_artifact_sha256="c" * 64,
+            speakers=[SpeakerProfile(id="spkA", label="Speaker A")],
+            utterances=[
+                Utterance(
+                    id="u1",
+                    start_ms=1000,
+                    end_ms=2000,
+                    text="你好吧",
+                    speaker="spkA",
+                    source_segment_ids=["source-1"],
+                    transcript_confirmed=True,
+                    transcript_review=review,
+                )
+            ],
+        )
+
+    accepted = Transcript(
+        video_id="vid1",
+        transcript_origin="asr",
+        asr_suggestion=suggestion,
+        asr_suggestion_artifact_sha256="c" * 64,
+        speakers=[SpeakerProfile(id="spkA", label="Speaker A")],
+        utterances=[
+            Utterance(
+                id="u1",
+                start_ms=1000,
+                end_ms=2000,
+                text="你好吗",
+                speaker="spkA",
+                source_segment_ids=["source-1"],
+                transcript_confirmed=True,
+                transcript_review=review,
+            )
+        ],
+    )
+    assert accepted.utterances[0].transcript_review == review
 
 
 def test_speaker_region_requires_explicit_value_before_confirmation() -> None:

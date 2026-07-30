@@ -1,3 +1,6 @@
+import hashlib
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -5,15 +8,20 @@ import pytest
 from fp_multimodel.corpus import prepare_mfa_corpus
 from fp_multimodel.manifest import (
     MediaManifest,
+    asr_suggestion_artifact_sha256,
     file_sha256,
     load_manifest,
     transcript_sha256,
+    write_asr_suggestion_artifact,
     write_media_manifest,
 )
 from fp_multimodel.models import (
     AsrProvenance,
+    AsrSuggestionArtifact,
     AsrSuggestionSegment,
+    SpeakerProfile,
     Transcript,
+    TranscriptReview,
     TranscriptSuggestion,
     Utterance,
 )
@@ -174,33 +182,66 @@ def test_prepare_corpus_rejects_asr_suggestion_from_different_audio(
 ) -> None:
     audio = make_verified_audio(tmp_path)
     reviewed = make_transcript()
+    provider_output_json = json.dumps(
+        {"segments": [{"id": 0, "text": "你吃饭了吗"}]},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    provider_output_sha256 = hashlib.sha256(
+        provider_output_json.encode("utf-8")
+    ).hexdigest()
+    suggestion = TranscriptSuggestion(
+        provenance=AsrProvenance(
+            provider="openai_whisper_cli",
+            model="large-v3",
+            language="zh",
+            task="transcribe",
+            confidence_method="exp_avg_logprob",
+            source_audio_sha256="f" * 64,
+            provider_output_sha256=provider_output_sha256,
+        ),
+        segments=(
+            AsrSuggestionSegment(
+                id="source-u1",
+                provider_segment_id="0",
+                start_ms=12_400,
+                end_ms=15_100,
+                surface_text="你吃饭了吗",
+                confidence=0.82,
+            ),
+        ),
+    )
+    artifact = AsrSuggestionArtifact(
+        video_id=reviewed.video_id,
+        suggestion=suggestion,
+        provider_output_json=provider_output_json,
+    )
+    write_asr_suggestion_artifact(tmp_path, artifact)
     reviewed = Transcript(
         video_id=reviewed.video_id,
         transcript_origin="asr",
-        asr_suggestion=TranscriptSuggestion(
-            provenance=AsrProvenance(
-                provider="openai_whisper_cli",
-                model="large-v3",
-                language="zh",
-                task="transcribe",
-                confidence_method="exp_avg_logprob",
-                source_audio_sha256="f" * 64,
-                provider_output_sha256="e" * 64,
-            ),
-            segments=(
-                AsrSuggestionSegment(
-                    id="source-u1",
-                    provider_segment_id="0",
-                    start_ms=12_400,
-                    end_ms=15_100,
-                    surface_text="你吃饭了吗",
-                    confidence=0.82,
-                ),
-            ),
+        asr_suggestion=suggestion,
+        asr_suggestion_artifact_sha256=asr_suggestion_artifact_sha256(
+            artifact
         ),
+        speakers=[SpeakerProfile(id="spkA", label="Speaker A")],
         utterances=[
             reviewed.utterances[0].model_copy(
-                update={"source_segment_ids": ["source-u1"]}
+                update={
+                    "source_segment_ids": ["source-u1"],
+                    "transcript_review": TranscriptReview(
+                        action="accept",
+                        reviewer_id="researcher-1",
+                        reviewed_at=datetime(
+                            2026,
+                            7,
+                            30,
+                            20,
+                            0,
+                            tzinfo=timezone.utc,
+                        ),
+                    ),
+                }
             )
         ],
     )

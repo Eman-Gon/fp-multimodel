@@ -3,11 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { LibraryBig, ListChecks } from "lucide-react";
+import { Bot, LibraryBig, ListChecks } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Queue", href: "/queue", Icon: ListChecks },
   { label: "Reviewed", href: "/explore", Icon: LibraryBig },
+  {
+    label: "AI Setup",
+    href: "/integrations/twelvelabs",
+    Icon: Bot,
+  },
 ] as const;
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
@@ -30,10 +35,10 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           {NAV_ITEMS.map(({ label, href, Icon }) => {
             const active =
               href === "/queue"
-                ? pathname === "/" || pathname.startsWith("/queue")
-                : href === "/explore"
-                  ? pathname.startsWith("/explore")
-                  : pathname.startsWith("/clips");
+                ? pathname === "/" ||
+                  pathname.startsWith("/queue") ||
+                  pathname.startsWith("/clips")
+                : pathname === href || pathname.startsWith(`${href}/`);
 
             return (
               <Link

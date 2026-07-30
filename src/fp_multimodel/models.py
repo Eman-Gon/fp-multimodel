@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from fp_multimodel.vocab import (
     EXTENDED_PARTICLE_CANDIDATES,
@@ -175,6 +183,16 @@ class TranscriptReview(FrozenStrictModel):
     reviewer_id: str = Field(min_length=1, pattern=r".*\S.*")
     reviewed_at: AwareDatetime
     evidence: str | None = None
+
+    @field_validator("reviewed_at", mode="before")
+    @classmethod
+    def parse_json_datetime(cls, value: object) -> object:
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as error:
+                raise ValueError("reviewed_at must be an ISO-8601 datetime") from error
+        return value
 
 
 class Utterance(StrictModel):

@@ -4424,3 +4424,98 @@ kbd {
     display: none;
   }
 }
+
+.explorer-zero-state {
+  display: grid;
+  min-height: 330px;
+  place-content: center;
+  justify-items: center;
+  padding: 46px 20px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+
+.explorer-zero-state > svg {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 16px;
+  color: var(--indigo);
+  stroke-width: 1.45;
+}
+
+.explorer-zero-state h2 {
+  margin: 0;
+  font-size: 25px;
+  letter-spacing: -0.03em;
+}
+
+.explorer-zero-state p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.explorer-zero-state .button {
+  gap: 8px;
+  margin-top: 22px;
+  padding: 0 16px;
+}
+
+.explorer-zero-state .button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.explorer-research {
+  margin-top: 28px;
+}
+
+.source-details {
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.source-details > summary {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 14px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+  list-style: none;
+}
+
+.source-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.source-details > summary small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.source-details .source-references {
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+
+.explorer-research .candidate-inventory {
+  margin: 10px 0 0;
+}
+
+@media (max-width: 560px) {
+  .explorer-zero-state {
+    min-height: 300px;
+  }
+
+  .source-details > summary {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+}
