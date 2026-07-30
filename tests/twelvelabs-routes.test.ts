@@ -92,6 +92,7 @@ test("index action waits for a ready asset and starts separate indexing", async 
       status: "ready",
       filename: "source.mp4",
       file_type: "video/mp4",
+      user_metadata: { video_id: "vid-03" },
     }),
     jsonResponse(
       { _id: "indexed-456", asset_id: "asset-123" },
@@ -195,12 +196,21 @@ test("analyze returns an unconfirmed draft with raw Pegasus provenance", async (
     }),
     finish_reason: "stop",
     usage: { output_tokens: 35 },
+    diagnostic: "server-secret",
   };
+  const responses = [
+    readyAssetResponse(),
+    jsonResponse(rawResponse),
+  ];
   const restoreFetch = setFetch(async (_input, init) => {
-    providerRequests.push(
-      JSON.parse(String(init?.body)) as Record<string, unknown>,
-    );
-    return jsonResponse(rawResponse);
+    if (init?.body !== undefined) {
+      providerRequests.push(
+        JSON.parse(String(init.body)) as Record<string, unknown>,
+      );
+    }
+    const providerResponse = responses.shift();
+    assert.ok(providerResponse);
+    return providerResponse;
   });
   t.after(() => {
     restoreFetch();
@@ -242,8 +252,15 @@ test("analyze returns an unconfirmed draft with raw Pegasus provenance", async (
     provider_window: { start_ms: 3_000, end_ms: 7_200 },
     response_id: "generation-1",
     finish_reason: "stop",
-    raw_response: rawResponse,
+    raw_response: {
+      id: "generation-1",
+      data: rawResponse.data,
+      finish_reason: "stop",
+    },
   });
+  assert.equal(JSON.stringify(body).includes("output_tokens"), false);
+  assert.equal(JSON.stringify(body).includes("server-secret"), false);
+  assertCanonicalMilliseconds(body.data);
 
   const providerRequest = providerRequests[0];
   assert.ok(providerRequest);
@@ -262,19 +279,25 @@ test("analyze returns an unconfirmed draft with raw Pegasus provenance", async (
 
 test("no-gesture analysis stays an explicit unconfirmed suggestion", async (t) => {
   const restoreEnvironment = setApiKey("server-secret");
-  const restoreFetch = setFetch(async () =>
+  const responses = [
+    readyAssetResponse(),
     jsonResponse({
-      id: "generation-none",
-      data: JSON.stringify({
-        gesture_type: "none",
-        gesture_region: null,
-        start_ms: null,
-        end_ms: null,
-        confidence: 0.63,
+        id: "generation-none",
+        data: JSON.stringify({
+          gesture_type: "none",
+          gesture_region: null,
+          start_ms: null,
+          end_ms: null,
+          confidence: 0.63,
+        }),
+        finish_reason: "stop",
       }),
-      finish_reason: "stop",
-    }),
-  );
+  ];
+  const restoreFetch = setFetch(async () => {
+    const providerResponse = responses.shift();
+    assert.ok(providerResponse);
+    return providerResponse;
+  });
   t.after(() => {
     restoreFetch();
     restoreEnvironment();
@@ -332,16 +355,22 @@ test("invalid cross-video input is rejected before TwelveLabs is called", async 
 test("malformed structured output becomes a safe provider error", async (t) => {
   const restoreEnvironment = setApiKey("server-secret");
   const secretDiagnostic = "provider-secret-diagnostic";
-  const restoreFetch = setFetch(async () =>
+  const responses = [
+    readyAssetResponse(),
     jsonResponse({
-      id: "generation-1",
-      data: JSON.stringify({
-        gesture_type: "not-controlled",
-        diagnostic: secretDiagnostic,
+        id: "generation-1",
+        data: JSON.stringify({
+          gesture_type: "not-controlled",
+          diagnostic: secretDiagnostic,
+        }),
+        finish_reason: "stop",
       }),
-      finish_reason: "stop",
-    }),
-  );
+  ];
+  const restoreFetch = setFetch(async () => {
+    const providerResponse = responses.shift();
+    assert.ok(providerResponse);
+    return providerResponse;
+  });
   t.after(() => {
     restoreFetch();
     restoreEnvironment();
@@ -403,5 +432,15 @@ function jsonResponse(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
     status,
     headers: { "Content-Type": "application/json" },
+  });
+}
+
+function readyAssetResponse(videoId = "vid-03"): Response {
+  return jsonResponse({
+    _id: "asset-123",
+    status: "ready",
+    filename: "source.mp4",
+    file_type: "video/mp4",
+    user_metadata: { video_id: videoId },
   });
 }

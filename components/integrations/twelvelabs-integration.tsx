@@ -14,7 +14,8 @@ import {
   Sparkles,
   Video,
 } from "lucide-react";
-import type { TimeRange } from "@/lib/types.ts";
+import { createGestureAnalysisWindow } from "@/lib/track-b/analysis-window.ts";
+import type { FinalParticleInstance, TimeRange } from "@/lib/types.ts";
 import { humanizeCode } from "@/lib/track-c/display.ts";
 import {
   analyzeTwelveLabsGesture,
@@ -22,13 +23,17 @@ import {
   startTwelveLabsIndex,
   TwelveLabsUiRequestError,
   type TwelveLabsGestureSuggestion,
+  type TwelveLabsIndexResult,
 } from "./twelvelabs-client.ts";
 
 export interface TwelveLabsVideoOption {
   readonly video_id: string;
   readonly instance_id: string;
+  readonly video_duration_ms: number;
+  readonly source_url: string;
   readonly analysis_window: TimeRange;
   readonly particle_interval: TimeRange;
+  readonly particle: FinalParticleInstance;
 }
 
 export interface AnalysisWindowDraft {
@@ -47,7 +52,10 @@ export type ConnectionViewState =
 export type IndexViewState =
   | { readonly status: "idle" }
   | { readonly status: "processing" }
-  | { readonly status: "ready" }
+  | {
+      readonly status: "ready";
+      readonly result: TwelveLabsIndexResult;
+    }
   | { readonly status: "failed"; readonly message: string };
 
 export type AnalysisViewState =
@@ -66,11 +74,17 @@ interface TwelveLabsIntegrationProps {
 export interface TwelveLabsIntegrationViewProps {
   readonly videoOptions: readonly TwelveLabsVideoOption[];
   readonly videoId: string;
+  readonly instanceId: string;
+  readonly indexId: string;
+  readonly videoUrl: string;
   readonly windowDraft: AnalysisWindowDraft;
   readonly connectionState: ConnectionViewState;
   readonly indexState: IndexViewState;
   readonly analysisState: AnalysisViewState;
   readonly onVideoIdChange: (videoId: string) => void;
+  readonly onInstanceIdChange: (instanceId: string) => void;
+  readonly onIndexIdChange: (indexId: string) => void;
+  readonly onVideoUrlChange: (videoUrl: string) => void;
   readonly onWindowValueChange: (
     field: keyof AnalysisWindowDraft,
     value: number | null,
@@ -92,6 +106,15 @@ export function TwelveLabsIntegration({
 }: TwelveLabsIntegrationProps) {
   const initialOption = videoOptions[0];
   const [videoId, setVideoId] = useState(initialOption?.video_id ?? "");
+  const [instanceId, setInstanceId] = useState(
+    initialOption?.instance_id ?? "",
+  );
+  const [indexId, setIndexId] = useState("");
+  const [videoUrl, setVideoUrl] = useState(
+    initialOption?.source_url.startsWith("https://")
+      ? initialOption.source_url
+      : "",
+  );
   const [windowDraft, setWindowDraft] = useState<AnalysisWindowDraft>(
     initialOption === undefined
       ? EMPTY_WINDOW_DRAFT
@@ -155,12 +178,32 @@ export function TwelveLabsIntegration({
     const knownVideo = videoOptions.find(
       ({ video_id: optionVideoId }) => optionVideoId === nextVideoId.trim(),
     );
+    setInstanceId(knownVideo?.instance_id ?? "");
+    setVideoUrl(
+      knownVideo?.source_url.startsWith("https://")
+        ? knownVideo.source_url
+        : "",
+    );
     setWindowDraft(
       knownVideo === undefined
         ? EMPTY_WINDOW_DRAFT
         : draftFromOption(knownVideo),
     );
     resetOperations();
+  };
+
+  const handleInstanceIdChange = (nextInstanceId: string) => {
+    setInstanceId(nextInstanceId);
+    const option = videoOptions.find(
+      (candidate) =>
+        candidate.video_id === videoId.trim() &&
+        candidate.instance_id === nextInstanceId,
+    );
+    setWindowDraft(
+      option === undefined ? EMPTY_WINDOW_DRAFT : draftFromOption(option),
+    );
+    analysisRequest.current += 1;
+    setAnalysisState({ status: "idle" });
   };
 
   const handleWindowValueChange = (
@@ -172,10 +215,22 @@ export function TwelveLabsIntegration({
     setAnalysisState({ status: "idle" });
   };
 
+  const handleIndexIdChange = (nextIndexId: string) => {
+    setIndexId(nextIndexId);
+    resetOperations();
+  };
+
+  const handleVideoUrlChange = (nextVideoUrl: string) => {
+    setVideoUrl(nextVideoUrl);
+    resetOperations();
+  };
+
   const handleStartIndexing = async () => {
     if (
       connectionState.status !== "configured" ||
       videoId.trim().length === 0 ||
+      indexId.trim().length === 0 ||
+      videoUrl.trim().length === 0 ||
       indexState.status === "processing"
     ) {
       return;
@@ -187,7 +242,11 @@ export function TwelveLabsIntegration({
     setAnalysisState({ status: "idle" });
 
     try {
-      const result = await startTwelveLabsIndex(videoId);
+      const result = await startTwelveLabsIndex({
+        video_id: videoId.trim(),
+        index_id: indexId.trim(),
+        video_url: videoUrl.trim(),
+      });
       if (requestId !== indexRequest.current) {
         return;
       }
@@ -197,7 +256,13 @@ export function TwelveLabsIntegration({
               status: "failed",
               message: "TwelveLabs reported that indexing failed.",
             }
-          : { status: result.status },
+          : result.status === "ready"
+            ? { status: "ready", result }
+            : {
+                status: "failed",
+                message:
+                  "TwelveLabs did not finish indexing within the polling window.",
+              },
       );
     } catch (error) {
       if (requestId !== indexRequest.current) {
@@ -214,10 +279,19 @@ export function TwelveLabsIntegration({
   };
 
   const handleAnalyze = async () => {
-    const validWindow = validWindowContext(windowDraft);
+    const selectedOption = videoOptions.find(
+      (option) =>
+        option.video_id === videoId.trim() &&
+        option.instance_id === instanceId,
+    );
+    const validWindow = validWindowContext(
+      windowDraft,
+      selectedOption?.video_duration_ms,
+    );
     if (
       connectionState.status !== "configured" ||
       indexState.status !== "ready" ||
+      selectedOption === undefined ||
       validWindow === null ||
       analysisState.status === "processing"
     ) {
@@ -227,9 +301,29 @@ export function TwelveLabsIntegration({
     const requestId = ++analysisRequest.current;
     setAnalysisState({ status: "processing" });
     try {
+      const particle = {
+        ...selectedOption.particle,
+        fp_start_ms: validWindow.particle_interval.start_ms,
+        fp_end_ms: validWindow.particle_interval.end_ms,
+      };
+      const expectedWindow = createGestureAnalysisWindow(
+        particle,
+        selectedOption.video_duration_ms,
+      );
+      if (
+        expectedWindow.start_ms !== validWindow.analysis_window.start_ms ||
+        expectedWindow.end_ms !== validWindow.analysis_window.end_ms
+      ) {
+        throw new TwelveLabsUiRequestError(
+          "The analysis window must remain the source-bounded ±2000ms Track B window around the particle.",
+        );
+      }
       const suggestion = await analyzeTwelveLabsGesture({
-        video_id: videoId,
-        analysis_window: validWindow.analysis_window,
+        video_id: selectedOption.video_id,
+        instance_id: selectedOption.instance_id,
+        asset_id: indexState.result.asset_id,
+        video_duration_ms: selectedOption.video_duration_ms,
+        particle,
       });
       if (requestId !== analysisRequest.current) {
         return;
@@ -253,11 +347,17 @@ export function TwelveLabsIntegration({
     <TwelveLabsIntegrationView
       videoOptions={videoOptions}
       videoId={videoId}
+      instanceId={instanceId}
+      indexId={indexId}
+      videoUrl={videoUrl}
       windowDraft={windowDraft}
       connectionState={connectionState}
       indexState={indexState}
       analysisState={analysisState}
       onVideoIdChange={handleVideoIdChange}
+      onInstanceIdChange={handleInstanceIdChange}
+      onIndexIdChange={handleIndexIdChange}
+      onVideoUrlChange={handleVideoUrlChange}
       onWindowValueChange={handleWindowValueChange}
       onCheckConnection={() => void checkConnection()}
       onStartIndexing={() => void handleStartIndexing()}
@@ -269,25 +369,45 @@ export function TwelveLabsIntegration({
 export function TwelveLabsIntegrationView({
   videoOptions,
   videoId,
+  instanceId,
+  indexId,
+  videoUrl,
   windowDraft,
   connectionState,
   indexState,
   analysisState,
   onVideoIdChange,
+  onInstanceIdChange,
+  onIndexIdChange,
+  onVideoUrlChange,
   onWindowValueChange,
   onCheckConnection,
   onStartIndexing,
   onAnalyze,
 }: TwelveLabsIntegrationViewProps) {
-  const windowError = windowValidationMessage(windowDraft);
-  const validWindow = validWindowContext(windowDraft);
+  const selectedOption = videoOptions.find(
+    (option) =>
+      option.video_id === videoId.trim() &&
+      option.instance_id === instanceId,
+  );
+  const windowError = windowValidationMessage(
+    windowDraft,
+    selectedOption?.video_duration_ms,
+  );
+  const validWindow = validWindowContext(
+    windowDraft,
+    selectedOption?.video_duration_ms,
+  );
   const canIndex =
     connectionState.status === "configured" &&
     videoId.trim().length > 0 &&
+    indexId.trim().length > 0 &&
+    videoUrl.trim().length > 0 &&
     indexState.status !== "processing";
   const canAnalyze =
     connectionState.status === "configured" &&
     indexState.status === "ready" &&
+    selectedOption !== undefined &&
     validWindow !== null &&
     analysisState.status !== "processing";
 
@@ -371,11 +491,49 @@ export function TwelveLabsIntegrationView({
             </div>
             <datalist id="twelvelabs-video-options">
               {videoOptions.map((option) => (
-                <option value={option.video_id} key={option.video_id}>
+                <option
+                  value={option.video_id}
+                  key={`${option.video_id}:${option.instance_id}`}
+                >
                   {option.instance_id}
                 </option>
               ))}
             </datalist>
+            <label className="twelvelabs-field" htmlFor="twelvelabs-index-id">
+              <span>TwelveLabs index_id</span>
+              <input
+                id="twelvelabs-index-id"
+                name="index_id"
+                value={indexId}
+                onChange={(event) =>
+                  onIndexIdChange(event.currentTarget.value)
+                }
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <small>
+                Use the destination index ID from your TwelveLabs account.
+              </small>
+            </label>
+            <label className="twelvelabs-field" htmlFor="twelvelabs-video-url">
+              <span>Public video URL</span>
+              <input
+                id="twelvelabs-video-url"
+                name="video_url"
+                type="url"
+                placeholder="https://…"
+                value={videoUrl}
+                onChange={(event) =>
+                  onVideoUrlChange(event.currentTarget.value)
+                }
+                autoComplete="url"
+                spellCheck={false}
+              />
+              <small>
+                TwelveLabs fetches this HTTPS URL server-side; the API key
+                remains on the server.
+              </small>
+            </label>
             <button
               type="submit"
               className={`button button--primary twelvelabs-primary-action${
@@ -411,6 +569,40 @@ export function TwelveLabsIntegrationView({
             id="twelvelabs-analyze-title"
           />
           <form onSubmit={(event) => submit(event, onAnalyze)}>
+            <label
+              className="twelvelabs-field"
+              htmlFor="twelvelabs-instance-id"
+            >
+              <span>Particle instance_id</span>
+              <select
+                id="twelvelabs-instance-id"
+                name="instance_id"
+                value={instanceId}
+                onChange={(event) =>
+                  onInstanceIdChange(event.currentTarget.value)
+                }
+                disabled={
+                  videoOptions.every(
+                    (option) => option.video_id !== videoId.trim(),
+                  )
+                }
+              >
+                {videoOptions
+                  .filter((option) => option.video_id === videoId.trim())
+                  .map((option) => (
+                    <option
+                      value={option.instance_id}
+                      key={`${option.video_id}:${option.instance_id}`}
+                    >
+                      {option.instance_id}
+                    </option>
+                  ))}
+              </select>
+              <small>
+                Each particle is analyzed independently and keeps this stable
+                ID through the response.
+              </small>
+            </label>
             <div className="twelvelabs-window-heading">
               <div>
                 <h3>Particle analysis window</h3>
@@ -863,7 +1055,22 @@ function AnalysisResult({
         : formatMilliseconds(suggestion.end_ms),
     ],
     ["Confidence", `${Math.round(suggestion.confidence * 100)}%`],
-    ["Provenance", suggestion.provenance],
+    [
+      "Provenance",
+      `${suggestion.provenance.provider} ${suggestion.provenance.model}`,
+    ],
+    ["video_id", suggestion.video_id],
+    ["instance_id", suggestion.instance_id],
+    ["Provider asset", suggestion.asset_id],
+    [
+      "Provider window",
+      formatRange(suggestion.provenance.provider_window),
+    ],
+    [
+      "Provider response",
+      suggestion.provenance.response_id ?? "Not supplied",
+    ],
+    ["Review state", suggestion.confirmed ? "Confirmed" : "Unconfirmed"],
   ] as const;
 
   return (
@@ -907,8 +1114,22 @@ function draftFromOption(option: TwelveLabsVideoOption): AnalysisWindowDraft {
 function validWindowContext(draft: AnalysisWindowDraft): {
   readonly analysis_window: TimeRange;
   readonly particle_interval: TimeRange;
+} | null;
+function validWindowContext(
+  draft: AnalysisWindowDraft,
+  videoDurationMs?: number,
+): {
+  readonly analysis_window: TimeRange;
+  readonly particle_interval: TimeRange;
+} | null;
+function validWindowContext(
+  draft: AnalysisWindowDraft,
+  videoDurationMs?: number,
+): {
+  readonly analysis_window: TimeRange;
+  readonly particle_interval: TimeRange;
 } | null {
-  if (windowValidationMessage(draft) !== null) {
+  if (windowValidationMessage(draft, videoDurationMs) !== null) {
     return null;
   }
   return {
@@ -925,6 +1146,7 @@ function validWindowContext(draft: AnalysisWindowDraft): {
 
 export function windowValidationMessage(
   draft: AnalysisWindowDraft,
+  videoDurationMs?: number,
 ): string | null {
   const values = [
     draft.window_start_ms,
@@ -957,11 +1179,24 @@ export function windowValidationMessage(
   if (particleStart < windowStart || particleEnd > windowEnd) {
     return "The particle interval must stay inside the analysis window.";
   }
+  if (
+    videoDurationMs !== undefined &&
+    (!Number.isSafeInteger(videoDurationMs) ||
+      videoDurationMs <= 0 ||
+      windowEnd > videoDurationMs)
+  ) {
+    return "The analysis window must stay inside the source video.";
+  }
   return null;
 }
 
 function requestErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof TwelveLabsUiRequestError ? error.message : fallback;
+  if (!(error instanceof TwelveLabsUiRequestError)) {
+    return fallback;
+  }
+  return error.retryable
+    ? `${error.message} This request can be retried.`
+    : error.message;
 }
 
 function submit(event: FormEvent<HTMLFormElement>, action: () => void) {

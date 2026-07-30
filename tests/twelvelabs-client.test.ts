@@ -87,6 +87,7 @@ test("direct URL upload and separate indexing preserve the local video id", asyn
 
   assert.deepEqual(asset, {
     id: "asset-123",
+    video_id: "vid-03",
     status: "processing",
     filename: "source.mp4",
     file_type: "video/mp4",
@@ -94,6 +95,7 @@ test("direct URL upload and separate indexing preserve the local video id", asyn
   assert.deepEqual(indexed, {
     id: "indexed-456",
     asset_id: "asset-123",
+    video_id: "vid-03",
     status: "queued",
   });
   assert.equal(calls[0]?.url, `${TWELVELABS_API_BASE_URL}/assets`);
@@ -181,8 +183,49 @@ test("structured analysis sends Pegasus 1.5 the existing prompt and schema", asy
     id: "generation-1",
     data: rawProviderResponse.data,
     finish_reason: "stop",
-    raw_response: rawProviderResponse,
+    raw_response: {
+      id: "generation-1",
+      data: rawProviderResponse.data,
+      finish_reason: "stop",
+    },
   });
+});
+
+test("successful provider diagnostics cannot expose the server credential", async () => {
+  const secret = "sentinel-success-secret";
+  const data = JSON.stringify({
+    gesture_type: "head_nod",
+    gesture_region: "face",
+    start_ms: 4_900,
+    end_ms: 5_300,
+    confidence: 0.84,
+  });
+  const client = new TwelveLabsClient({
+    apiKey: secret,
+    baseUrl: TWELVELABS_API_BASE_URL,
+    fetch: (async () =>
+      jsonResponse({
+        id: "generation-safe",
+        data,
+        finish_reason: "stop",
+        diagnostic: `echoed ${secret}`,
+      })) as typeof fetch,
+  });
+
+  const result = await client.analyzeStructured({
+    asset_id: "asset-123",
+    prompt: "prompt",
+    response_schema: PEGASUS_GESTURE_RESPONSE_SCHEMA,
+    start_ms: 3_000,
+    end_ms: 7_200,
+  });
+
+  assert.deepEqual(result.raw_response, {
+    id: "generation-safe",
+    data,
+    finish_reason: "stop",
+  });
+  assert.equal(JSON.stringify(result).includes(secret), false);
 });
 
 test("provider errors never echo an upstream body or credential", async () => {
@@ -204,6 +247,68 @@ test("provider errors never echo an upstream body or credential", async () => {
       assert.equal(error.message.includes(upstreamDiagnostic), false);
       return true;
     },
+  );
+});
+
+test("the request timeout covers a stalled provider response body", async () => {
+  const stalledBody = new ReadableStream<Uint8Array>({
+    start() {
+      // Deliberately never enqueue or close.
+    },
+  });
+  const client = new TwelveLabsClient({
+    apiKey: "server-secret",
+    baseUrl: TWELVELABS_API_BASE_URL,
+    timeoutMs: 5,
+    fetch: (async () =>
+      new Response(stalledBody, {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })) as typeof fetch,
+  });
+
+  await assert.rejects(
+    client.retrieveAsset("asset-123"),
+    (error: unknown) =>
+      error instanceof TwelveLabsError &&
+      error.code === "TWELVELABS_TIMEOUT" &&
+      error.retryable,
+  );
+});
+
+test("retrieved provider identifiers and video metadata must match", async () => {
+  const responses = [
+    jsonResponse({
+      _id: "different-asset",
+      status: "ready",
+      filename: null,
+      file_type: null,
+      user_metadata: { video_id: "vid-03" },
+    }),
+    jsonResponse({
+      _id: "different-indexed",
+      asset_id: "asset-123",
+      status: "ready",
+      user_metadata: { video_id: "vid-03" },
+    }),
+  ];
+  const client = new TwelveLabsClient({
+    apiKey: "server-secret",
+    baseUrl: TWELVELABS_API_BASE_URL,
+    fetch: (async () => {
+      const response = responses.shift();
+      assert.ok(response);
+      return response;
+    }) as typeof fetch,
+  });
+
+  await assert.rejects(
+    client.retrieveAsset("asset-123"),
+    /mismatched identifier/,
+  );
+  await assert.rejects(
+    client.retrieveIndexedAsset("index-789", "indexed-456"),
+    /mismatched identifier/,
   );
 });
 

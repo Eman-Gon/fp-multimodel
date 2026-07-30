@@ -27,7 +27,7 @@ export interface TwelveLabsIndexedAsset {
   readonly status: TwelveLabsIndexedAssetStatus;
 }
 
-export interface TwelveLabsAnalyzeResponse {
+export interface TwelveLabsProviderAnalyzeResponse {
   readonly id: string | null;
   readonly data: string;
   readonly finish_reason: string | null;
@@ -200,7 +200,7 @@ export class TwelveLabsClient {
 
   async analyzeStructured(
     request: AnalyzeStructuredRequest,
-  ): Promise<TwelveLabsAnalyzeResponse> {
+  ): Promise<TwelveLabsProviderAnalyzeResponse> {
     assertNonEmpty(request.asset_id, "asset_id");
     assertNonEmpty(request.prompt, "prompt");
     assertMilliseconds(request.start_ms, "start_ms");
