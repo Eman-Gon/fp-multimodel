@@ -246,11 +246,18 @@ export function TwelveLabsIntegration({
   };
 
   const handleStartIndexing = async () => {
+    const selectedVideo = videoOptions.find(
+      (option) => option.video_id === videoId.trim(),
+    );
+    const bundledSourceUrl =
+      videoFile === null && videoUrl.trim().length === 0
+        ? bundledVideoSourceUrl(selectedVideo?.source_url)
+        : null;
     const fileError = videoFileValidationMessage(videoFile);
     const hasUploadSource =
       videoFile !== null
         ? fileError === null
-        : videoUrl.trim().length > 0;
+        : videoUrl.trim().length > 0 || bundledSourceUrl !== null;
     if (
       connectionState.status !== "configured" ||
       videoId.trim().length === 0 ||
@@ -266,6 +273,18 @@ export function TwelveLabsIntegration({
     setAnalysisState({ status: "idle" });
 
     try {
+      const uploadFile =
+        videoFile ??
+        (bundledSourceUrl === null
+          ? null
+          : await loadBundledVideoFile(bundledSourceUrl));
+      const uploadFileError = videoFileValidationMessage(uploadFile);
+      if (uploadFile !== null && uploadFileError !== null) {
+        throw new TwelveLabsUiRequestError(uploadFileError);
+      }
+      if (requestId !== indexRequest.current) {
+        return;
+      }
       const destination =
         indexId.trim().length > 0
           ? indexId.trim()
@@ -277,7 +296,7 @@ export function TwelveLabsIntegration({
         setIndexId(destination);
       }
       const result =
-        videoFile === null
+        uploadFile === null
           ? await startTwelveLabsIndex({
               video_id: videoId.trim(),
               index_id: destination,
@@ -286,8 +305,8 @@ export function TwelveLabsIntegration({
           : await startTwelveLabsIndex({
               video_id: videoId.trim(),
               index_id: destination,
-              video_file: videoFile,
-              filename: videoFile.name,
+              video_file: uploadFile,
+              filename: uploadFile.name,
             });
       if (requestId !== indexRequest.current) {
         return;
@@ -459,11 +478,18 @@ export function TwelveLabsIntegrationView({
   const knownVideo = videoOptions.some(
     ({ video_id: optionVideoId }) => optionVideoId === videoId.trim(),
   );
+  const selectedVideo = videoOptions.find(
+    ({ video_id: optionVideoId }) => optionVideoId === videoId.trim(),
+  );
+  const bundledSourceUrl =
+    videoFile === null && videoUrl.trim().length === 0
+      ? bundledVideoSourceUrl(selectedVideo?.source_url)
+      : null;
   const fileError = videoFileValidationMessage(videoFile);
   const hasUploadSource =
     videoFile !== null
       ? fileError === null
-      : videoUrl.trim().length > 0;
+      : videoUrl.trim().length > 0 || bundledSourceUrl !== null;
   const canIndex =
     connectionState.status === "configured" &&
     videoId.trim().length > 0 &&
@@ -658,7 +684,7 @@ export function TwelveLabsIntegrationView({
                 <LoaderCircle className="is-spinning" aria-hidden="true" />
               ) : indexState.status === "ready" ? (
                 <CheckCircle2 aria-hidden="true" />
-              ) : videoFile !== null ? (
+              ) : videoFile !== null || bundledSourceUrl !== null ? (
                 <Upload aria-hidden="true" />
               ) : (
                 <Video aria-hidden="true" />
@@ -667,7 +693,9 @@ export function TwelveLabsIntegrationView({
                 ? "Uploading & indexing…"
                 : indexState.status === "ready"
                   ? "Uploaded & indexed"
-                : videoFile === null
+                : bundledSourceUrl !== null
+                  ? "Upload & index bundled video"
+                  : videoFile === null
                   ? "Index public URL"
                   : "Upload & index file"}
             </button>
@@ -1327,6 +1355,38 @@ export function videoFileValidationMessage(
     return "The video file must be 200 MB or smaller.";
   }
   return null;
+}
+
+function bundledVideoSourceUrl(sourceUrl: string | undefined): string | null {
+  if (
+    sourceUrl === undefined ||
+    !sourceUrl.startsWith("/") ||
+    sourceUrl.startsWith("//")
+  ) {
+    return null;
+  }
+  return sourceUrl;
+}
+
+async function loadBundledVideoFile(sourceUrl: string): Promise<File> {
+  const response = await fetch(sourceUrl, { cache: "no-store" });
+  if (!response.ok) {
+    throw new TwelveLabsUiRequestError(
+      "The bundled source video could not be loaded for upload.",
+      { status: response.status },
+    );
+  }
+  const blob = await response.blob();
+  const encodedFilename = sourceUrl.split("/").at(-1) || "source-video.mp4";
+  let filename = encodedFilename;
+  try {
+    filename = decodeURIComponent(encodedFilename);
+  } catch {
+    // Keep the valid URL segment when it is not valid percent-encoding.
+  }
+  return new File([blob], filename, {
+    type: blob.type || "video/mp4",
+  });
 }
 
 export function windowValidationMessage(

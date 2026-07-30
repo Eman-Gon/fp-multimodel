@@ -343,6 +343,30 @@ test("the setup view exposes a local video picker and visible indexing IDs", () 
   assert.match(markup, /Demo timing is never applied to a new upload/);
 });
 
+test("a registered bundled video is immediately available for indexing", () => {
+  const markup = renderView({
+    videoOptions: [
+      {
+        ...videoOption(),
+        source_url: "/demo/mandarin-conversation.mp4",
+      },
+    ],
+    videoUrl: "",
+    connectionState: { status: "configured" },
+    indexState: { status: "idle" },
+    analysisState: { status: "idle" },
+  });
+
+  const labelOffset = markup.indexOf("Upload &amp; index bundled video");
+  assert.notEqual(labelOffset, -1);
+  const buttonOffset = markup.lastIndexOf("<button", labelOffset);
+  const openingButton = markup.slice(
+    buttonOffset,
+    markup.indexOf(">", buttonOffset) + 1,
+  );
+  assert.doesNotMatch(openingButton, /disabled/);
+});
+
 test("local file validation enforces the shared 200 MB browser limit", () => {
   assert.equal(videoFileValidationMessage(null), null);
   assert.match(
