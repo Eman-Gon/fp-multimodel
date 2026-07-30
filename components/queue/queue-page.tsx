@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowUp, Filter, Play } from "lucide-react";
 import {
   CLIP_STATUSES,
@@ -14,6 +15,7 @@ const QUEUE_ITEM = {
   transcript: "你不是已经吃过了吗",
   particle: "吗",
   sentenceType: "polar_question",
+  speakerId: "spkA",
   speaker: "Speaker A",
   status: "in_review",
   confidence: 0.61,
@@ -21,6 +23,17 @@ const QUEUE_ITEM = {
 } as const;
 
 export function QueuePage() {
+  const [particleFilter, setParticleFilter] = useState("");
+  const [sentenceFilter, setSentenceFilter] = useState("");
+  const [speakerFilter, setSpeakerFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const matchesFilters =
+    (particleFilter === "" || particleFilter === QUEUE_ITEM.particle) &&
+    (sentenceFilter === "" ||
+      sentenceFilter === QUEUE_ITEM.sentenceType) &&
+    (speakerFilter === "" || speakerFilter === QUEUE_ITEM.speakerId) &&
+    (statusFilter === "" || statusFilter === QUEUE_ITEM.status);
+
   return (
     <main className="queue-page">
       <header className="queue-header">
@@ -46,7 +59,10 @@ export function QueuePage() {
         </div>
         <label>
           <span>Particle</span>
-          <select defaultValue="">
+          <select
+            value={particleFilter}
+            onChange={(event) => setParticleFilter(event.currentTarget.value)}
+          >
             <option value="">All particles</option>
             {TARGET_PARTICLES.map(({ token, pinyin }) => (
               <option value={token} key={token}>
@@ -57,7 +73,10 @@ export function QueuePage() {
         </label>
         <label>
           <span>Sentence type</span>
-          <select defaultValue="">
+          <select
+            value={sentenceFilter}
+            onChange={(event) => setSentenceFilter(event.currentTarget.value)}
+          >
             <option value="">All sentence types</option>
             {SENTENCE_TYPES.map((sentenceType) => (
               <option value={sentenceType} key={sentenceType}>
@@ -68,7 +87,10 @@ export function QueuePage() {
         </label>
         <label>
           <span>Speaker</span>
-          <select defaultValue="">
+          <select
+            value={speakerFilter}
+            onChange={(event) => setSpeakerFilter(event.currentTarget.value)}
+          >
             <option value="">All speakers</option>
             <option value="spkA">Speaker A</option>
             <option value="spkB">Speaker B</option>
@@ -76,7 +98,10 @@ export function QueuePage() {
         </label>
         <label>
           <span>Status</span>
-          <select defaultValue="">
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.currentTarget.value)}
+          >
             <option value="">All statuses</option>
             {CLIP_STATUSES.map((status) => (
               <option value={status} key={status}>
@@ -91,7 +116,7 @@ export function QueuePage() {
         <div className="queue-table__caption">
           <div>
             <h2 id="queue-table-title">Needs attention</h2>
-            <p>1 seeded review item</p>
+            <p>{matchesFilters ? "1 seeded review item" : "0 review items"}</p>
           </div>
           <span>
             <ArrowUp aria-hidden="true" />
@@ -113,35 +138,43 @@ export function QueuePage() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>
-                <strong>{QUEUE_ITEM.transcript}</strong>
-                <span>
-                  {QUEUE_ITEM.id} · {QUEUE_ITEM.duration}
-                </span>
-              </td>
-              <td lang="zh-Hans">{QUEUE_ITEM.particle}</td>
-              <td>{QUEUE_ITEM.sentenceType}</td>
-              <td>{QUEUE_ITEM.speaker}</td>
-              <td>
-                <span className="queue-status">{QUEUE_ITEM.status}</span>
-              </td>
-              <td>
-                <span className="confidence-value">
-                  {Math.round(QUEUE_ITEM.confidence * 100)}%
-                </span>
-                <small>Addressee</small>
-              </td>
-              <td>
-                <Link
-                  href={`/clips/${QUEUE_ITEM.id}`}
-                  className="queue-open"
-                  aria-label={`Review ${QUEUE_ITEM.id}`}
-                >
-                  <Play aria-hidden="true" />
-                </Link>
-              </td>
-            </tr>
+            {matchesFilters ? (
+              <tr>
+                <td>
+                  <strong>{QUEUE_ITEM.transcript}</strong>
+                  <span>
+                    {QUEUE_ITEM.id} · {QUEUE_ITEM.duration}
+                  </span>
+                </td>
+                <td lang="zh-Hans">{QUEUE_ITEM.particle}</td>
+                <td>{QUEUE_ITEM.sentenceType}</td>
+                <td>{QUEUE_ITEM.speaker}</td>
+                <td>
+                  <span className="queue-status">{QUEUE_ITEM.status}</span>
+                </td>
+                <td>
+                  <span className="confidence-value">
+                    {Math.round(QUEUE_ITEM.confidence * 100)}%
+                  </span>
+                  <small>Addressee</small>
+                </td>
+                <td>
+                  <Link
+                    href={`/clips/${QUEUE_ITEM.id}`}
+                    className="queue-open"
+                    aria-label={`Review ${QUEUE_ITEM.id}`}
+                  >
+                    <Play aria-hidden="true" />
+                  </Link>
+                </td>
+              </tr>
+            ) : (
+              <tr>
+                <td colSpan={7} className="queue-empty">
+                  No seeded clips match these filters.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </section>
@@ -152,4 +185,3 @@ export function QueuePage() {
     </main>
   );
 }
-
