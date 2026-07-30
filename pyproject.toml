@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fp-multimodel"
+version = "0.1.0"
+description = "Human-in-the-loop coding pipeline for Mandarin sentence-final particles and gesture"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "praatio>=6.2,<7",
+  "pydantic>=2.7,<3",
+]
+
+[project.scripts]
+fp-track-a = "fp_multimodel.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.2,<9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fp_multimodel"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
